@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 인증 관련 ====================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  histories     History[]
+  chatSessions  ChatSession[]
+}
+
+// ==================== 채팅 세션 관련 ====================
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  title     String?  // 첫 질문 기반 자동 생성
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  messages  ChatMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([updatedAt])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String   // "user" | "assistant"
+  content   String   // 사용자 질문 또는 설명
+  sql       String?  // 생성된 SQL (assistant만)
+
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+}
+
+// ==================== 히스토리 관련 ====================
+
+model History {
+  id        String      @id @default(cuid())
+  type      String      // "documentation" | "query"
+  input     String      // 사용자 입력 (코드 또는 자연어)
+  output    String      // Claude 응답
+  metadata  String?     // JSON 형태의 추가 정보
+
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime    @default(now())
+
+  @@index([userId, type])
+  @@index([createdAt])
+}
