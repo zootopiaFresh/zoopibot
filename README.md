@@ -33,7 +33,7 @@ yarn install
 # .env 예시
 DATABASE_URL="file:./dev.db"
 NEXTAUTH_SECRET="your-secret-key"
-NEXTAUTH_URL="http://localhost:2999"
+NEXTAUTH_URL="http://localhost:3000"
 ```
 
 ### 3. 데이터베이스 초기화
@@ -49,7 +49,7 @@ npx prisma migrate dev
 yarn dev
 ```
 
-브라우저에서 http://localhost:2999 접속
+브라우저에서 http://localhost:3000 접속
 
 ## 프로젝트 구조
 
