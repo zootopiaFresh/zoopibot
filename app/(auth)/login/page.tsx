@@ -1,16 +1,24 @@
 'use client';
 
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  useEffect(() => {
+    if (searchParams.get('pending') === 'true') {
+      setSuccessMessage('회원가입이 완료되었습니다. 관리자 승인 후 로그인이 가능합니다.');
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +33,13 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        if (result.error.includes('pending')) {
+          setError('관리자 승인 대기 중입니다. 승인 후 로그인이 가능합니다.');
+        } else if (result.error.includes('inactive')) {
+          setError('비활성화된 계정입니다. 관리자에게 문의하세요.');
+        } else {
+          setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        }
       } else {
         router.push('/query-generator');
       }
@@ -77,6 +91,12 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {successMessage && (
+            <div className="bg-blue-50 text-blue-700 text-sm text-center p-3 rounded-md">
+              {successMessage}
+            </div>
+          )}
+
           {error && (
             <div className="text-red-600 text-sm text-center">{error}</div>
           )}
@@ -97,5 +117,17 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }

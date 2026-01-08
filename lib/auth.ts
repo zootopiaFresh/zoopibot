@@ -33,6 +33,15 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        // 회원 상태 체크
+        if (user.status === 'pending') {
+          throw new Error('pending');
+        }
+
+        if (user.status === 'inactive') {
+          throw new Error('inactive');
+        }
+
         return {
           id: user.id,
           email: user.email,
@@ -43,7 +52,8 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   session: {
-    strategy: 'jwt'
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30일
   },
   pages: {
     signIn: '/login'

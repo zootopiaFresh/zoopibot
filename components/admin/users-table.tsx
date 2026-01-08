@@ -61,7 +61,16 @@ function ActionMenu({ user, onViewDetail, onStatusChange, onDelete }: {
             <Eye className="w-4 h-4" />
             상세 보기
           </button>
-          {user.status === 'active' ? (
+          {user.status === 'pending' && (
+            <button
+              onClick={() => { onStatusChange('active'); setIsOpen(false); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-600 hover:bg-gray-50"
+            >
+              <UserCheck className="w-4 h-4" />
+              승인
+            </button>
+          )}
+          {user.status === 'active' && (
             <button
               onClick={() => { onStatusChange('inactive'); setIsOpen(false); }}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-600 hover:bg-gray-50"
@@ -69,7 +78,8 @@ function ActionMenu({ user, onViewDetail, onStatusChange, onDelete }: {
               <UserX className="w-4 h-4" />
               비활성화
             </button>
-          ) : (
+          )}
+          {user.status === 'inactive' && (
             <button
               onClick={() => { onStatusChange('active'); setIsOpen(false); }}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-600 hover:bg-gray-50"
@@ -144,11 +154,13 @@ export function UsersTable({ users, loading, onViewDetail, onStatusChange, onDel
             </td>
             <td className="px-4 py-3">
               <span className={`px-2 py-1 text-xs rounded-full ${
-                user.status === 'active'
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-red-100 text-red-700'
+                user.status === 'pending'
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : user.status === 'active'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-red-100 text-red-700'
               }`}>
-                {user.status === 'active' ? '활성' : '비활성'}
+                {user.status === 'pending' ? '승인대기' : user.status === 'active' ? '활성' : '비활성'}
               </span>
             </td>
             <td className="px-4 py-3 text-gray-700">
