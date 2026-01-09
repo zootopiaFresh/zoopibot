@@ -20,12 +20,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { prompt } = requestSchema.parse(body);
 
+    const userId = (session.user as any).id;
+
     // schema 폴더에서 자동으로 스키마 로드
     const schema = await getCachedSchema();
-    const result = await generateSQL(prompt, schema);
+    const result = await generateSQL(prompt, schema, undefined, undefined, userId);
 
     // 히스토리 저장
-    const userId = (session.user as any).id;
     await prisma.history.create({
       data: {
         type: 'query',

@@ -15,12 +15,18 @@ export function Header() {
           <h1 className="text-lg font-semibold text-gray-800">SQL Assistant</h1>
 
           <div className="flex items-center gap-4">
+            <Link
+              href="/settings"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              설정
+            </Link>
             {isAdmin && (
               <Link
                 href="/admin"
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
               >
-                <Settings className="w-4 h-4" />
                 Admin
               </Link>
             )}

@@ -59,8 +59,8 @@ export async function POST(
     // 마크다운 스키마 사용 (schema 폴더)
     const schema = await getCachedSchema();
 
-    // Claude에게 요청
-    let result = await generateSQL(content, schema, history);
+    // Claude에게 요청 (사용자 선호도 적용)
+    let result = await generateSQL(content, schema, history, undefined, userId);
 
     // Claude가 실제 데이터 확인이 필요하다고 판단한 경우
     if (result.needsData && result.dataQuery) {
@@ -73,7 +73,7 @@ export async function POST(
         result = await generateSQL(content, schema, history, {
           query: result.dataQuery,
           data: queryResult.rows
-        });
+        }, userId);
       } catch (queryError: any) {
         console.error('[Chat API] Data query failed:', queryError.message);
         // 쿼리 실패 시 원래 응답 유지

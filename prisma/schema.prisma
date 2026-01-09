@@ -21,6 +21,28 @@ model User {
 
   histories     History[]
   chatSessions  ChatSession[]
+  preference    UserPreference?
+}
+
+// ==================== 맞춤형 프롬프트 설정 ====================
+
+// 사용자 선호도
+model UserPreference {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // SQL 스타일
+  sqlKeywordCase      String   @default("uppercase")    // "uppercase" | "lowercase"
+  aliasStyle          String   @default("meaningful")   // "short" | "meaningful"
+  indentation         String   @default("2spaces")      // "2spaces" | "4spaces" | "tab"
+
+  // 응답 스타일
+  explanationDetail   String   @default("detailed")     // "brief" | "detailed"
+  responseTone        String   @default("formal")       // "formal" | "casual"
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 // ==================== 채팅 세션 관련 ====================
