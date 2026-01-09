@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { QuickFeedback, FeedbackButton } from '@/components/chat/feedback-button';
 
 interface Message {
   id: string;
@@ -481,6 +482,11 @@ export default function QueryGeneratorPage() {
                         >
                           {message.content}
                         </ReactMarkdown>
+                      </div>
+                      {/* 피드백 버튼 */}
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+                        <QuickFeedback sessionId={currentSessionId || undefined} messageId={message.id} />
+                        <FeedbackButton sessionId={currentSessionId || undefined} messageId={message.id} />
                       </div>
                     </div>
                   )}

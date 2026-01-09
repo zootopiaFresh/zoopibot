@@ -19,11 +19,13 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  histories     History[]
-  chatSessions  ChatSession[]
-  preference    UserPreference?
-  domainTerms   DomainTerm[]
-  businessRules BusinessRule[]
+  histories       History[]
+  chatSessions    ChatSession[]
+  preference      UserPreference?
+  domainTerms     DomainTerm[]
+  businessRules   BusinessRule[]
+  frequentTables  FrequentTable[]
+  promptFeedbacks PromptFeedback[]
 }
 
 // ==================== 맞춤형 프롬프트 설정 ====================
@@ -78,6 +80,54 @@ model BusinessRule {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ==================== 학습 시스템 ====================
+
+// 자주 사용하는 테이블
+model FrequentTable {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tableName   String
+  usageCount  Int      @default(1)
+  lastUsedAt  DateTime @default(now())
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, tableName])
+  @@index([userId])
+}
+
+// 사용자 피드백
+model PromptFeedback {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sessionId   String?
+  messageId   String?
+  feedback    String
+  type        String   // "preference" | "correction" | "rule"
+  isProcessed Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([isProcessed])
+}
+
+// 학습 로그
+model LearningLog {
+  id          String   @id @default(cuid())
+  userId      String
+
+  learnedAt   DateTime @default(now())
+  summary     String   // JSON
 
   @@index([userId])
 }
