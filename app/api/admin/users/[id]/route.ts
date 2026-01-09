@@ -43,6 +43,40 @@ export async function GET(
             createdAt: true
           }
         },
+        // 맞춤형 프롬프트 관련
+        preference: {
+          select: {
+            sqlKeywordCase: true,
+            aliasStyle: true,
+            indentation: true,
+            includeComments: true,
+            explainLevel: true,
+            defaultLimit: true,
+          }
+        },
+        domainTerms: {
+          take: 50,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            term: true,
+            mapping: true,
+            description: true,
+            createdAt: true,
+          }
+        },
+        businessRules: {
+          take: 50,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            name: true,
+            condition: true,
+            sqlSnippet: true,
+            isActive: true,
+            createdAt: true,
+          }
+        },
         _count: {
           select: {
             chatSessions: true,

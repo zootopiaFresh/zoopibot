@@ -9,7 +9,9 @@ import {
   History,
   LogOut,
   Database,
-  FileCode
+  FileCode,
+  MessageSquareText,
+  Brain
 } from 'lucide-react';
 
 const menuItems = [
@@ -17,6 +19,8 @@ const menuItems = [
   { href: '/admin/users', label: '회원 관리', icon: Users },
   { href: '/admin/histories', label: '히스토리', icon: History },
   { href: '/admin/schema-prompts', label: '스키마 프롬프트', icon: FileCode },
+  { href: '/admin/feedbacks', label: '피드백', icon: MessageSquareText },
+  { href: '/admin/learning', label: '학습 관리', icon: Brain },
 ];
 
 export function AdminSidebar() {

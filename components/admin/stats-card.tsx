@@ -5,9 +5,10 @@ interface StatsCardProps {
   value: number | string;
   icon: React.ReactNode;
   trend?: { value: number; isUp: boolean };
+  subtitle?: string;
 }
 
-export function StatsCard({ title, value, icon, trend }: StatsCardProps) {
+export function StatsCard({ title, value, icon, trend, subtitle }: StatsCardProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between">
@@ -16,6 +17,9 @@ export function StatsCard({ title, value, icon, trend }: StatsCardProps) {
           <p className="text-2xl font-bold text-gray-900 mt-1">
             {typeof value === 'number' ? value.toLocaleString() : value}
           </p>
+          {subtitle && (
+            <p className="text-xs text-gray-400 mt-1">{subtitle}</p>
+          )}
           {trend && (
             <div className={`flex items-center mt-2 text-sm ${trend.isUp ? 'text-green-600' : 'text-red-600'}`}>
               {trend.isUp ? (

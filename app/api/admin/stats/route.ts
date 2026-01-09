@@ -21,6 +21,8 @@ export async function GET() {
       todayUsers,
       totalQueries,
       activeSessions,
+      totalFeedbacks,
+      pendingFeedbacks,
       recentUsers,
       recentHistories
     ] = await Promise.all([
@@ -28,6 +30,8 @@ export async function GET() {
       prisma.user.count({ where: { createdAt: { gte: today } } }),
       prisma.history.count({ where: { type: 'query' } }),
       prisma.chatSession.count({ where: { updatedAt: { gte: yesterday } } }),
+      prisma.promptFeedback.count(),
+      prisma.promptFeedback.count({ where: { isProcessed: false } }),
       prisma.user.findMany({
         take: 5,
         orderBy: { createdAt: 'desc' },
@@ -51,6 +55,8 @@ export async function GET() {
       todayUsers,
       totalQueries,
       activeSessions,
+      totalFeedbacks,
+      pendingFeedbacks,
       recentUsers,
       recentHistories,
     });

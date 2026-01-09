@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, MessageSquare, Activity } from 'lucide-react';
+import { Users, UserPlus, MessageSquare, Activity, MessageSquareText } from 'lucide-react';
 import { StatsCard } from '@/components/admin/stats-card';
 
 interface Stats {
@@ -9,6 +9,8 @@ interface Stats {
   todayUsers: number;
   totalQueries: number;
   activeSessions: number;
+  totalFeedbacks: number;
+  pendingFeedbacks: number;
   recentUsers: Array<{
     id: string;
     email: string;
@@ -64,7 +66,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* 통계 카드 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatsCard
           title="총 회원 수"
           value={stats?.totalUsers || 0}
@@ -84,6 +86,12 @@ export default function AdminDashboardPage() {
           title="활성 세션 (24h)"
           value={stats?.activeSessions || 0}
           icon={<Activity className="w-6 h-6" />}
+        />
+        <StatsCard
+          title="미처리 피드백"
+          value={stats?.pendingFeedbacks || 0}
+          icon={<MessageSquareText className="w-6 h-6" />}
+          subtitle={`전체 ${stats?.totalFeedbacks || 0}건`}
         />
       </div>
 
