@@ -22,6 +22,8 @@ model User {
   histories     History[]
   chatSessions  ChatSession[]
   preference    UserPreference?
+  domainTerms   DomainTerm[]
+  businessRules BusinessRule[]
 }
 
 // ==================== 맞춤형 프롬프트 설정 ====================
@@ -43,6 +45,41 @@ model UserPreference {
 
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+}
+
+// 도메인 용어집
+model DomainTerm {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  term        String   // 비즈니스 용어
+  mapping     String   // DB 매핑
+  description String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, term])
+  @@index([userId])
+}
+
+// 비즈니스 규칙
+model BusinessRule {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  condition   String   // SQL 조건
+  scope       String   @default("global")
+  isActive    Boolean  @default(true)
+  isLearned   Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // ==================== 채팅 세션 관련 ====================

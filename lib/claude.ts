@@ -4,6 +4,7 @@ import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { getUserPreference, buildStylePrompt } from './preferences';
+import { getUserContext, buildContextPrompt } from './context';
 
 const execAsync = promisify(exec);
 
@@ -143,11 +144,15 @@ export async function generateSQL(
   queryResult?: { query: string; data: any[] },
   userId?: string
 ): Promise<SQLResponse> {
-  // 사용자 선호도 로드
+  // 사용자 선호도 및 컨텍스트 로드
   let stylePrompt = '';
+  let contextPrompt = '';
   if (userId) {
     const preference = await getUserPreference(userId);
     stylePrompt = buildStylePrompt(preference);
+
+    const { terms, rules } = await getUserContext(userId);
+    contextPrompt = buildContextPrompt(terms, rules);
   }
 
   // 대화 히스토리 포맷팅
@@ -185,7 +190,7 @@ ${dataPreview}
 사용자의 자연어 요청을 SQL 쿼리로 변환하고, 쿼리에 대한 설명을 한국어로 제공합니다.
 이전 대화 맥락이 있다면 참고하여 응답해주세요.
 
-${stylePrompt}
+${stylePrompt}${contextPrompt}
 
 **중요**: 질문에 정확히 답변하기 위해 실제 데이터 확인이 필요한 경우:
 - 예: "현재 회원이 몇 명이야?", "가장 많이 팔린 상품은?", "특정 값이 있는지 확인" 등
