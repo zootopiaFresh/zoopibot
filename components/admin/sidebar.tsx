@@ -8,13 +8,15 @@ import {
   Users,
   History,
   LogOut,
-  Database
+  Database,
+  FileCode
 } from 'lucide-react';
 
 const menuItems = [
   { href: '/admin', label: '대시보드', icon: LayoutDashboard },
   { href: '/admin/users', label: '회원 관리', icon: Users },
   { href: '/admin/histories', label: '히스토리', icon: History },
+  { href: '/admin/schema-prompts', label: '스키마 프롬프트', icon: FileCode },
 ];
 
 export function AdminSidebar() {

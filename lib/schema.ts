@@ -1,37 +1,64 @@
-import { readdir, readFile } from 'fs/promises';
-import { join } from 'path';
+import { prisma } from '@/lib/db';
 
-const SCHEMA_DIR = join(process.cwd(), 'schema');
+// 캐시 설정
+let schemaCache: string | null = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5분
 
-// schema 폴더의 모든 마크다운 파일을 읽어서 하나의 문자열로 반환
-export async function loadAllSchemas(): Promise<string> {
+// DB에서 스키마 프롬프트 로드
+async function loadSchemaFromDB(): Promise<string> {
   try {
-    const files = await readdir(SCHEMA_DIR);
-    const mdFiles = files
-      .filter(f => f.endsWith('.md'))
-      .sort(); // 01-member.md, 02-pet.md 순서로 정렬
+    const prompts = await prisma.schemaPrompt.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+      select: {
+        name: true,
+        content: true,
+      },
+    });
 
-    const schemas: string[] = [];
-
-    for (const file of mdFiles) {
-      const content = await readFile(join(SCHEMA_DIR, file), 'utf-8');
-      schemas.push(`\n--- ${file} ---\n${content}`);
+    if (prompts.length === 0) {
+      console.warn('[Schema] No active schema prompts found in DB');
+      return '';
     }
 
-    return schemas.join('\n');
+    const schema = prompts
+      .map((p) => `\n--- ${p.name} ---\n${p.content}`)
+      .join('\n');
+
+    console.log(
+      `[Schema] Loaded ${prompts.length} prompts (${schema.length} chars) from DB`
+    );
+
+    return schema;
   } catch (error) {
-    console.error('[Schema] Failed to load schemas:', error);
+    console.error('[Schema] Failed to load schemas from DB:', error);
     return '';
   }
 }
 
-// 캐시된 스키마 (서버 시작 시 한 번만 로드)
-let cachedSchema: string | null = null;
-
+// 캐시된 스키마 반환 (TTL 적용)
 export async function getCachedSchema(): Promise<string> {
-  if (!cachedSchema) {
-    cachedSchema = await loadAllSchemas();
-    console.log(`[Schema] Loaded ${cachedSchema.length} characters`);
+  const now = Date.now();
+
+  // 캐시가 유효하면 반환
+  if (schemaCache && now - cacheTimestamp < CACHE_TTL) {
+    return schemaCache;
   }
-  return cachedSchema;
+
+  // 캐시 갱신
+  schemaCache = await loadSchemaFromDB();
+  cacheTimestamp = now;
+
+  return schemaCache;
 }
+
+// 캐시 무효화
+export function invalidateSchemaCache(): void {
+  schemaCache = null;
+  cacheTimestamp = 0;
+  console.log('[Schema] Cache invalidated');
+}
+
+// 하위 호환성을 위한 alias
+export const loadAllSchemas = getCachedSchema;

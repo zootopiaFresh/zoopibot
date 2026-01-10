@@ -163,6 +163,23 @@ model ChatMessage {
   @@index([sessionId])
 }
 
+// ==================== 스키마 프롬프트 관리 ====================
+
+// 스키마 프롬프트 (DB 스키마 마크다운)
+model SchemaPrompt {
+  id        String   @id @default(cuid())
+
+  name      String   @unique   // "01-member", "02-pet" 등 (정렬용)
+  content   String             // 마크다운 내용
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([name])
+}
+
 // ==================== 히스토리 관련 ====================
 
 model History {
