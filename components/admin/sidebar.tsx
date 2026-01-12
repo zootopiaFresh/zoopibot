@@ -11,12 +11,14 @@ import {
   Database,
   FileCode,
   MessageSquareText,
-  Brain
+  Brain,
+  MessagesSquare
 } from 'lucide-react';
 
 const menuItems = [
   { href: '/admin', label: '대시보드', icon: LayoutDashboard },
   { href: '/admin/users', label: '회원 관리', icon: Users },
+  { href: '/admin/conversations', label: '대화내역', icon: MessagesSquare },
   { href: '/admin/histories', label: '히스토리', icon: History },
   { href: '/admin/schema-prompts', label: '스키마 프롬프트', icon: FileCode },
   { href: '/admin/feedbacks', label: '피드백', icon: MessageSquareText },

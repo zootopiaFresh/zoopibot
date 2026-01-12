@@ -79,13 +79,25 @@ export default function QueryGeneratorPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // 기본적으로 닫힘
   const [executingQuery, setExecutingQuery] = useState<string | null>(null);
   const [queryResults, setQueryResults] = useState<Record<string, QueryResult | { error: string }>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isSubmitting = useRef(false);
+
+  // 데스크톱에서는 사이드바 기본 열림
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(true);
+      }
+    };
+    handleResize(); // 초기 실행
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     fetchSessions();
@@ -342,9 +354,21 @@ export default function QueryGeneratorPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-56px)]">
+    <div className="flex h-full relative">
+      {/* 모바일 오버레이 */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* 사이드바 */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 bg-gray-900 flex flex-col overflow-hidden`}>
+      <div className={`
+        fixed lg:relative inset-y-0 left-0 z-30 lg:z-auto
+        ${sidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0'}
+        transition-all duration-300 bg-gray-900 flex flex-col overflow-hidden
+      `}>
         <div className="p-3">
           <button
             onClick={handleNewChat}
@@ -362,7 +386,13 @@ export default function QueryGeneratorPage() {
           {sessions.map((session) => (
             <div
               key={session.id}
-              onClick={() => loadSession(session.id)}
+              onClick={() => {
+                loadSession(session.id);
+                // 모바일에서 세션 선택 시 사이드바 닫기
+                if (window.innerWidth < 1024) {
+                  setSidebarOpen(false);
+                }
+              }}
               className={`group flex items-center gap-2 px-3 py-2 text-sm rounded-lg cursor-pointer mb-1 ${
                 currentSessionId === session.id
                   ? 'bg-gray-700 text-white'
@@ -375,7 +405,7 @@ export default function QueryGeneratorPage() {
               <span className="flex-1 truncate">{session.title || '새 대화'}</span>
               <button
                 onClick={(e) => deleteSession(session.id, e)}
-                className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-opacity"
+                className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-opacity"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -386,11 +416,15 @@ export default function QueryGeneratorPage() {
         </div>
       </div>
 
-      {/* 토글 버튼 */}
+      {/* 토글 버튼 - 모바일에서는 항상 보이도록 */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-gray-800 text-white p-1 rounded-r-md hover:bg-gray-700"
-        style={{ left: sidebarOpen ? '256px' : '0' }}
+        className={`
+          fixed lg:absolute top-1/2 -translate-y-1/2 z-10
+          bg-gray-800 text-white p-1.5 rounded-r-md hover:bg-gray-700
+          transition-all duration-300
+          ${sidebarOpen ? 'left-64' : 'left-0'}
+        `}
       >
         <svg className={`w-4 h-4 transition-transform ${sidebarOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -398,18 +432,18 @@ export default function QueryGeneratorPage() {
       </button>
 
       {/* 메인 채팅 영역 */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-gray-500">
-              <div className="w-16 h-16 mb-6 rounded-full bg-indigo-100 flex items-center justify-center">
-                <svg className="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="h-full flex flex-col items-center justify-center text-gray-500 px-4">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 mb-4 sm:mb-6 rounded-full bg-indigo-100 flex items-center justify-center">
+                <svg className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
                 </svg>
               </div>
-              <h2 className="text-2xl font-semibold text-gray-700 mb-2">SQL 쿼리 생성</h2>
-              <p className="text-gray-400 mb-8">자연어로 질문하면 SQL 쿼리를 생성하고 실행할 수 있습니다</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl px-4">
+              <h2 className="text-xl sm:text-2xl font-semibold text-gray-700 mb-2 text-center">SQL 쿼리 생성</h2>
+              <p className="text-sm sm:text-base text-gray-400 mb-6 sm:mb-8 text-center">자연어로 질문하면 SQL 쿼리를 생성하고 실행할 수 있습니다</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full max-w-2xl">
                 {[
                   '지난 30일간 가입한 회원 수',
                   '가장 많이 팔린 상품 TOP 10',
@@ -419,7 +453,7 @@ export default function QueryGeneratorPage() {
                   <button
                     key={example}
                     onClick={() => setInput(example)}
-                    className="text-left px-4 py-3 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-sm text-gray-600"
+                    className="text-left px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 active:bg-indigo-100 transition-colors text-sm text-gray-600"
                   >
                     {example}
                   </button>
@@ -427,14 +461,14 @@ export default function QueryGeneratorPage() {
               </div>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto py-6 px-4">
+            <div className="max-w-3xl mx-auto py-4 sm:py-6 px-3 sm:px-4">
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`mb-6 ${message.role === 'user' ? 'flex justify-end' : ''}`}
+                  className={`mb-4 sm:mb-6 ${message.role === 'user' ? 'flex justify-end' : ''}`}
                 >
                   {message.role === 'user' ? (
-                    <div className="max-w-[80%] bg-indigo-600 text-white px-4 py-3 rounded-2xl rounded-br-md">
+                    <div className="max-w-[85%] sm:max-w-[80%] bg-indigo-600 text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl rounded-br-md text-sm sm:text-base">
                       {message.content}
                     </div>
                   ) : (
@@ -510,7 +544,7 @@ export default function QueryGeneratorPage() {
         </div>
 
         {/* 입력 영역 */}
-        <div className="border-t bg-white p-4">
+        <div className="border-t bg-white p-2 sm:p-4">
           <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
             <div className="relative flex items-end bg-gray-100 rounded-2xl border border-gray-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100">
               <textarea
@@ -520,20 +554,20 @@ export default function QueryGeneratorPage() {
                 onKeyDown={handleKeyDown}
                 placeholder="SQL 쿼리가 필요한 내용을 입력하세요..."
                 rows={1}
-                className="flex-1 bg-transparent px-4 py-3 resize-none focus:outline-none text-gray-700 placeholder-gray-400"
+                className="flex-1 bg-transparent px-3 sm:px-4 py-2.5 sm:py-3 resize-none focus:outline-none text-sm sm:text-base text-gray-700 placeholder-gray-400"
                 disabled={loading}
               />
               <button
                 type="submit"
                 disabled={!input.trim() || loading}
-                className="m-2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="m-1.5 sm:m-2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
             </div>
-            <p className="text-xs text-gray-400 text-center mt-2">
+            <p className="text-xs text-gray-400 text-center mt-1.5 sm:mt-2">
               Enter로 전송, Shift+Enter로 줄바꿈
             </p>
           </form>
