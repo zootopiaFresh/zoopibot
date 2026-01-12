@@ -290,7 +290,7 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
                   user.domainTerms.map((term) => (
                     <div key={term.id} className="p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-gray-900">"{term.term}"</span>
+                        <span className="font-medium text-gray-900">&ldquo;{term.term}&rdquo;</span>
                         <span className="text-gray-400">→</span>
                         <code className="text-sm text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{term.mapping}</code>
                       </div>

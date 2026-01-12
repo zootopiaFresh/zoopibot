@@ -23,6 +23,16 @@ interface UserDetail extends User {
   updatedAt: string;
   chatSessions: Array<{ id: string; title: string | null; updatedAt: string; _count: { messages: number } }>;
   histories: Array<{ id: string; type: string; input: string; createdAt: string }>;
+  preference: {
+    sqlKeywordCase: string;
+    aliasStyle: string;
+    indentation: string;
+    includeComments: boolean;
+    explainLevel: string;
+    defaultLimit: number;
+  } | null;
+  domainTerms: Array<{ id: string; term: string; mapping: string; description: string | null; createdAt: string }>;
+  businessRules: Array<{ id: string; name: string; condition: string; sqlSnippet: string; isActive: boolean; createdAt: string }>;
 }
 
 export default function AdminUsersPage() {

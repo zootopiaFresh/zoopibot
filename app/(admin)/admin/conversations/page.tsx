@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Eye, MessageCircle, User, Bot, X, Search, Calendar } from 'lucide-react';
 import { Pagination } from '@/components/ui/pagination';
 
@@ -51,11 +51,7 @@ export default function AdminConversationsPage() {
   const [selectedSession, setSelectedSession] = useState<ConversationDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  useEffect(() => {
-    fetchSessions();
-  }, [currentPage]);
-
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -77,7 +73,11 @@ export default function AdminConversationsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, search, startDate, endDate]);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
 
   const handleSearch = () => {
     setCurrentPage(1);
