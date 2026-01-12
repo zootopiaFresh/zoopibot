@@ -10,6 +10,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   sql?: string | null;
+  parseError?: boolean;  // SQL 파싱 실패 플래그
   createdAt?: string;
 }
 
@@ -202,7 +203,8 @@ export default function QueryGeneratorPage() {
             data.userMessage,
             {
               ...data.assistantMessage,
-              sql: data.assistantMessage.sql,
+              sql: data.assistantMessage.sql || null,
+              parseError: data.assistantMessage.parseError || false,
             }
           ];
         });
@@ -473,39 +475,44 @@ export default function QueryGeneratorPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {message.sql && (
-                        <>
-                          <div className="bg-gray-900 rounded-xl overflow-hidden">
-                            <div className="flex items-center justify-between px-4 py-2 bg-gray-800">
-                              <span className="text-xs text-gray-400">SQL</span>
-                              <button
-                                onClick={() => copyToClipboard(message.sql!, `sql-${message.id}`)}
-                                className={`text-xs transition-colors flex items-center gap-1 ${
-                                  copiedId === `sql-${message.id}` ? 'text-green-400' : 'text-gray-400 hover:text-white'
-                                }`}
-                              >
-                                {copiedId === `sql-${message.id}` ? (
-                                  <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    복사됨
-                                  </>
-                                ) : (
-                                  <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                    </svg>
-                                    복사
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                            <pre className="p-4 text-sm text-green-400 overflow-x-auto">
-                              <code>{message.sql}</code>
-                            </pre>
+                      {message.sql ? (
+                        <div className="bg-gray-900 rounded-xl overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-2 bg-gray-800">
+                            <span className="text-xs text-gray-400">SQL</span>
+                            <button
+                              onClick={() => copyToClipboard(message.sql!, `sql-${message.id}`)}
+                              className={`text-xs transition-colors flex items-center gap-1 ${
+                                copiedId === `sql-${message.id}` ? 'text-green-400' : 'text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              {copiedId === `sql-${message.id}` ? (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  복사됨
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                  복사
+                                </>
+                              )}
+                            </button>
                           </div>
-                        </>
+                          <pre className="p-4 text-sm text-green-400 overflow-x-auto">
+                            <code>{message.sql}</code>
+                          </pre>
+                        </div>
+                      ) : message.parseError && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+                          <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <span className="text-sm text-amber-700">SQL을 생성하지 못했습니다. 질문을 다시 시도해주세요.</span>
+                        </div>
                       )}
                       <div className="text-gray-700 leading-relaxed prose prose-sm max-w-none prose-table:border-collapse prose-td:border prose-td:border-gray-300 prose-td:px-3 prose-td:py-2 prose-th:border prose-th:border-gray-300 prose-th:px-3 prose-th:py-2 prose-th:bg-gray-100 prose-th:font-semibold prose-table:text-sm prose-code:text-indigo-600 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
                         <ReactMarkdown

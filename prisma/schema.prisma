@@ -180,6 +180,29 @@ model SchemaPrompt {
   @@index([name])
 }
 
+// ==================== 에러 로그 ====================
+
+// SQL 생성 실패 로그
+model GenerationError {
+  id          String   @id @default(cuid())
+  userId      String?
+  sessionId   String?
+  messageId   String?
+
+  errorType   String   // "parse_error" | "db_query_error" | "timeout" | "context_load_error" | "cli_error"
+  errorMessage String
+
+  prompt      String?  // 사용자 입력
+  rawResponse String?  // Claude 원본 응답
+  metadata    String?  // JSON (추가 정보: dataQuery, 스택트레이스 등)
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([errorType])
+  @@index([createdAt])
+}
+
 // ==================== 히스토리 관련 ====================
 
 model History {

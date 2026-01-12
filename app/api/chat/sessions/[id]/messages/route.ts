@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { generateSQL } from '@/lib/claude';
 import { getCachedSchema } from '@/lib/schema';
 import { executeQuery } from '@/lib/mysql';
+import { logGenerationError } from '@/lib/error-logger';
 import { z } from 'zod';
 
 const requestSchema = z.object({
@@ -59,8 +60,10 @@ export async function POST(
     // 마크다운 스키마 사용 (schema 폴더)
     const schema = await getCachedSchema();
 
-    // Claude에게 요청 (사용자 선호도 적용)
-    let result = await generateSQL(content, schema, history, undefined, userId);
+    const sessionId = params.id;
+
+    // Claude에게 요청 (사용자 선호도 적용, sessionId 전달)
+    let result = await generateSQL(content, schema, history, undefined, userId, sessionId);
 
     // Claude가 실제 데이터 확인이 필요하다고 판단한 경우
     if (result.needsData && result.dataQuery) {
@@ -73,10 +76,28 @@ export async function POST(
         result = await generateSQL(content, schema, history, {
           query: result.dataQuery,
           data: queryResult.rows
-        }, userId);
+        }, userId, sessionId);
       } catch (queryError: any) {
         console.error('[Chat API] Data query failed:', queryError.message);
-        // 쿼리 실패 시 원래 응답 유지
+
+        // 데이터 쿼리 실패 로그 저장
+        logGenerationError({
+          errorType: 'db_query_error',
+          errorMessage: `데이터 확인 쿼리 실패: ${queryError.message}`,
+          userId,
+          sessionId,
+          prompt: content,
+          metadata: { dataQuery: result.dataQuery }
+        });
+
+        // 쿼리 실패 시 사용자에게 알림
+        result = {
+          ...result,
+          sql: '',
+          explanation: `⚠️ 데이터 확인 중 오류가 발생했습니다: ${queryError.message}\n\n시도한 쿼리:\n\`\`\`sql\n${result.dataQuery}\n\`\`\`\n\n질문을 다시 시도해주세요.`,
+          needsData: false,
+          parseError: true
+        };
       }
     }
 
@@ -110,7 +131,8 @@ export async function POST(
       assistantMessage: {
         ...assistantMessage,
         sql: result.sql,
-        explanation: result.explanation
+        explanation: result.explanation,
+        parseError: result.parseError || false
       }
     });
   } catch (error) {
