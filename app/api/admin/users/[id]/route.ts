@@ -49,9 +49,8 @@ export async function GET(
             sqlKeywordCase: true,
             aliasStyle: true,
             indentation: true,
-            includeComments: true,
-            explainLevel: true,
-            defaultLimit: true,
+            explanationDetail: true,
+            responseTone: true,
           }
         },
         domainTerms: {
@@ -72,7 +71,7 @@ export async function GET(
             id: true,
             name: true,
             condition: true,
-            sqlSnippet: true,
+            scope: true,
             isActive: true,
             createdAt: true,
           }

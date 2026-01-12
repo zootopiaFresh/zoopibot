@@ -21,9 +21,8 @@ interface UserPreference {
   sqlKeywordCase: string;
   aliasStyle: string;
   indentation: string;
-  includeComments: boolean;
-  explainLevel: string;
-  defaultLimit: number;
+  explanationDetail: string;
+  responseTone: string;
 }
 
 interface DomainTerm {
@@ -38,7 +37,7 @@ interface BusinessRule {
   id: string;
   name: string;
   condition: string;
-  sqlSnippet: string;
+  scope: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -74,9 +73,8 @@ const preferenceLabels: Record<string, { label: string; format?: (v: any) => str
   sqlKeywordCase: { label: 'SQL 키워드', format: v => v === 'uppercase' ? '대문자' : '소문자' },
   aliasStyle: { label: '별칭 스타일', format: v => v === 'meaningful' ? '의미있는' : '짧은' },
   indentation: { label: '들여쓰기', format: v => v === '2spaces' ? '2칸' : v === '4spaces' ? '4칸' : '탭' },
-  includeComments: { label: '주석 포함', format: v => v ? '예' : '아니오' },
-  explainLevel: { label: '설명 수준', format: v => v === 'detailed' ? '상세' : v === 'moderate' ? '보통' : '간략' },
-  defaultLimit: { label: '기본 LIMIT' },
+  explanationDetail: { label: '설명 상세도', format: v => v === 'detailed' ? '상세' : '간략' },
+  responseTone: { label: '응답 톤', format: v => v === 'formal' ? '격식체' : '비격식체' },
 };
 
 export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps) {
@@ -325,7 +323,7 @@ export function UserDetailModal({ user, isOpen, onClose }: UserDetailModalProps)
                         </span>
                       </div>
                       <p className="text-xs text-gray-600 mb-1">조건: {rule.condition}</p>
-                      <code className="text-xs text-gray-500 block bg-gray-100 p-2 rounded">{rule.sqlSnippet}</code>
+                      <span className="text-xs text-gray-500">범위: {rule.scope === 'global' ? '전역' : rule.scope}</span>
                     </div>
                   ))
                 ) : (

@@ -27,12 +27,11 @@ interface UserDetail extends User {
     sqlKeywordCase: string;
     aliasStyle: string;
     indentation: string;
-    includeComments: boolean;
-    explainLevel: string;
-    defaultLimit: number;
+    explanationDetail: string;
+    responseTone: string;
   } | null;
   domainTerms: Array<{ id: string; term: string; mapping: string; description: string | null; createdAt: string }>;
-  businessRules: Array<{ id: string; name: string; condition: string; sqlSnippet: string; isActive: boolean; createdAt: string }>;
+  businessRules: Array<{ id: string; name: string; condition: string; scope: string; isActive: boolean; createdAt: string }>;
 }
 
 export default function AdminUsersPage() {
