@@ -8,8 +8,31 @@ import { getUserContext, buildContextPrompt } from './context';
 import { getUnprocessedFeedbacks, buildFeedbackPrompt } from './feedback';
 import { getFrequentTables, buildFrequentTablesPrompt } from './learning';
 import { logGenerationError } from './error-logger';
+import { callOpenClaw, getAIBackendMode } from './openclaw';
 
 const execAsync = promisify(exec);
+
+/**
+ * AI 백엔드를 통해 프롬프트를 실행한다.
+ * AI_BACKEND 환경변수에 따라 Claude CLI 또는 OpenClaw Gateway를 사용.
+ *
+ * - AI_BACKEND=openclaw → OpenClaw Gateway HTTP API
+ * - AI_BACKEND=claude-cli (기본값) → Claude CLI (shell exec)
+ */
+export async function runAI(prompt: string, sessionKey?: string): Promise<string> {
+  const mode = getAIBackendMode();
+
+  if (mode === 'openclaw') {
+    return runOpenClaw(prompt, sessionKey);
+  }
+
+  return runClaudeCLI(prompt);
+}
+
+// OpenClaw Gateway를 통해 프롬프트 실행
+async function runOpenClaw(prompt: string, sessionKey?: string): Promise<string> {
+  return callOpenClaw(prompt, { sessionKey });
+}
 
 // Claude CLI를 사용하여 프롬프트 실행
 export async function runClaudeCLI(prompt: string): Promise<string> {
@@ -115,12 +138,12 @@ ${code}
 \`\`\``
   };
 
-  const result = await runClaudeCLI(prompts[type]);
+  const result = await runAI(prompts[type]);
 
   return {
     result,
     usage: {
-      input: 0, // CLI는 usage 정보 제공 안함
+      input: 0,
       output: 0
     }
   };
@@ -285,7 +308,8 @@ ${stylePrompt}${contextPrompt}${feedbackPrompt}${frequentTablesPrompt}
 
 ${schema ? `DB 스키마:\n${schema}\n\n` : ''}${conversationContext}${dataContext}현재 요청: ${prompt}`;
 
-  const result = await runClaudeCLI(fullPrompt);
+  // AI 백엔드 모드에 따라 호출 (OpenClaw 또는 Claude CLI)
+  const result = await runAI(fullPrompt, sessionId);
 
   let parsed;
   let parseError = false;

@@ -17,7 +17,15 @@
   },
 
   "gateway": {
-    "port": 18789
+    "port": 18789,
+    "auth": {
+      "token": "<YOUR_OPENCLAW_GATEWAY_TOKEN>"
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": { "enabled": true }
+      }
+    }
   },
 
   "skills": {

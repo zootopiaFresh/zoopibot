@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateServiceToken, unauthorizedResponse } from '@/lib/service-auth';
-import { runClaudeCLI } from '@/lib/claude';
+import { runAI } from '@/lib/claude';
 import { z } from 'zod';
 
 const requestSchema = z.object({
@@ -43,7 +43,7 @@ ${dataPreview}
 
 간결하고 이해하기 쉽게 한국어로 작성해주세요.`;
 
-    const interpretation = await runClaudeCLI(prompt);
+    const interpretation = await runAI(prompt);
 
     return NextResponse.json({ interpretation });
   } catch (error: any) {

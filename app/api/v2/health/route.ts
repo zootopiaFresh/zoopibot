@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { testConnection } from '@/lib/mysql';
+import { getAIBackendMode, testOpenClawConnection } from '@/lib/openclaw';
 
 export async function GET() {
   try {
+    const aiBackend = getAIBackendMode();
+
     // SQLite (Prisma) 연결 체크
     let dbOk = false;
     try {
@@ -16,26 +19,31 @@ export async function GET() {
     // MySQL 연결 체크
     const mysqlOk = await testConnection();
 
-    // Claude CLI 체크
-    let claudeOk = false;
-    try {
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      await execAsync('which claude', { timeout: 5000 });
-      claudeOk = true;
-    } catch {
-      claudeOk = false;
+    // AI 백엔드 체크
+    let aiOk = false;
+    if (aiBackend === 'openclaw') {
+      aiOk = await testOpenClawConnection();
+    } else {
+      try {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        const execAsync = promisify(exec);
+        await execAsync('which claude', { timeout: 5000 });
+        aiOk = true;
+      } catch {
+        aiOk = false;
+      }
     }
 
-    const allOk = dbOk && mysqlOk && claudeOk;
+    const allOk = dbOk && mysqlOk && aiOk;
 
     return NextResponse.json(
       {
         status: allOk ? 'ok' : 'degraded',
+        aiBackend,
+        ai: aiOk,
         db: dbOk,
         mysql: mysqlOk,
-        claude: claudeOk,
         timestamp: new Date().toISOString(),
       },
       { status: allOk ? 200 : 503 }

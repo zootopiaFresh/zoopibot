@@ -141,12 +141,12 @@ export async function POST(req: NextRequest) {
     let interpretation: string | undefined;
     if (interpret && data && data.length > 0) {
       try {
-        const { runClaudeCLI } = await import('@/lib/claude');
+        const { runAI } = await import('@/lib/claude');
         const interpretPrompt = `다음 SQL 쿼리 결과를 비즈니스 관점에서 한국어로 간결하게 해석해주세요.
 쿼리: ${result.sql}
 결과 (${data.length}행${data.length > 20 ? ', 상위 20행만 표시' : ''}):
 ${JSON.stringify(data.slice(0, 20), null, 2)}`;
-        interpretation = await runClaudeCLI(interpretPrompt);
+        interpretation = await runAI(interpretPrompt);
       } catch {
         // 해석 실패는 무시
       }
