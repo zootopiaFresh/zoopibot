@@ -12,7 +12,7 @@ import { logGenerationError } from './error-logger';
 const execAsync = promisify(exec);
 
 // Claude CLI를 사용하여 프롬프트 실행
-async function runClaudeCLI(prompt: string): Promise<string> {
+export async function runClaudeCLI(prompt: string): Promise<string> {
   // 임시 파일에 프롬프트 저장
   const tempFile = join(tmpdir(), `claude-prompt-${Date.now()}.txt`);
   await writeFile(tempFile, prompt, 'utf-8');

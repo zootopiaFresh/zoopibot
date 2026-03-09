@@ -1,0 +1,34 @@
+{
+  "$schema": "https://openclaw.ai/schema/openclaw.json",
+
+  "agents": {
+    "defaults": {
+      "workspace": "~/.openclaw/workspace",
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5"
+      }
+    }
+  },
+
+  "channels": {
+    "slack": {
+      "mode": "socket"
+    }
+  },
+
+  "gateway": {
+    "port": 18789
+  },
+
+  "skills": {
+    "entries": {
+      "zoopibot-query": {
+        "enabled": true,
+        "env": {
+          "ZOOPIBOT_URL": "http://localhost:3000",
+          "ZOOPIBOT_SERVICE_TOKEN": "<YOUR_SERVICE_TOKEN>"
+        }
+      }
+    }
+  }
+}

@@ -19,13 +19,26 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  histories       History[]
-  chatSessions    ChatSession[]
-  preference      UserPreference?
-  domainTerms     DomainTerm[]
-  businessRules   BusinessRule[]
-  frequentTables  FrequentTable[]
-  promptFeedbacks PromptFeedback[]
+  histories         History[]
+  chatSessions      ChatSession[]
+  preference        UserPreference?
+  domainTerms       DomainTerm[]
+  businessRules     BusinessRule[]
+  frequentTables    FrequentTable[]
+  promptFeedbacks   PromptFeedback[]
+  slackUserMapping  SlackUserMapping?
+}
+
+// ==================== Slack 연동 ====================
+
+model SlackUserMapping {
+  id          String   @id @default(cuid())
+  slackUserId String   @unique
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedAt    DateTime @default(now())
+
+  @@index([slackUserId])
 }
 
 // ==================== 맞춤형 프롬프트 설정 ====================
