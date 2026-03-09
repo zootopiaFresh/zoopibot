@@ -290,21 +290,11 @@ ${stylePrompt}${contextPrompt}${feedbackPrompt}${frequentTablesPrompt}
 - needsData를 true로 설정하고, dataQuery에 확인용 SQL을 작성하세요.
 - 단순 쿼리 작성 요청이면 needsData는 false입니다.
 
-응답은 다음 JSON 형식으로 반환해주세요:
-{
-  "sql": "SELECT ... (사용자가 원하는 최종 쿼리)",
-  "explanation": "이 쿼리는...",
-  "needsData": false,
-  "dataQuery": ""
-}
+**반드시** 아래 JSON 형식으로만 응답하세요. JSON 외의 텍스트는 절대 포함하지 마세요:
+{"sql": "SELECT ...", "explanation": "이 쿼리는...", "needsData": false, "dataQuery": ""}
 
 또는 실제 데이터 확인이 필요한 경우:
-{
-  "sql": "",
-  "explanation": "데이터를 확인하고 있습니다...",
-  "needsData": true,
-  "dataQuery": "SELECT ... (확인용 쿼리)"
-}
+{"sql": "", "explanation": "데이터를 확인하고 있습니다...", "needsData": true, "dataQuery": "SELECT ..."}
 
 ${schema ? `DB 스키마:\n${schema}\n\n` : ''}${conversationContext}${dataContext}현재 요청: ${prompt}`;
 
@@ -345,11 +335,24 @@ ${schema ? `DB 스키마:\n${schema}\n\n` : ''}${conversationContext}${dataConte
       rawResponse: result,
     });
 
-    // 파싱 실패 시 원본 응답을 explanation으로 사용
-    parsed = {
-      sql: '',
-      explanation: `⚠️ SQL 생성 중 파싱 오류가 발생했습니다.\n\n**원본 응답:**\n${result}`
-    };
+    // 파싱 실패 시 응답에서 SQL과 설명을 최대한 추출
+    const sqlBlockMatch = result.match(/```sql\s*([\s\S]*?)\s*```/);
+    if (sqlBlockMatch) {
+      // SQL 코드블록 발견 → sql + 나머지를 explanation으로
+      const extractedSql = sqlBlockMatch[1].trim();
+      const explanation = result.replace(sqlBlockMatch[0], '').trim();
+      parsed = { sql: extractedSql, explanation };
+      parseError = false;
+    } else if (result.length > 20) {
+      // SQL 블록 없지만 응답이 충분하면 → 전체를 explanation으로 (데이터 조회 후 직접 답변한 경우)
+      parsed = { sql: '', explanation: result };
+      parseError = false;
+    } else {
+      parsed = {
+        sql: '',
+        explanation: `⚠️ SQL 생성 중 파싱 오류가 발생했습니다.\n\n**원본 응답:**\n${result}`
+      };
+    }
   }
 
   return {
