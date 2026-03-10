@@ -1,11 +1,15 @@
 {
   "$schema": "https://openclaw.ai/schema/openclaw.json",
 
+  "env": {
+    "OPENAI_API_KEY": "<YOUR_OPENAI_API_KEY>"
+  },
+
   "agents": {
     "defaults": {
       "workspace": "~/.openclaw/workspace",
       "model": {
-        "primary": "anthropic/claude-sonnet-4-5"
+        "primary": "openai/gpt-5.4"
       }
     }
   },
@@ -17,6 +21,7 @@
   },
 
   "gateway": {
+    "mode": "local",
     "port": 18789,
     "auth": {
       "token": "<YOUR_OPENCLAW_GATEWAY_TOKEN>"

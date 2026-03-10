@@ -14,7 +14,7 @@ Claude Code 기반 사내 AI 어시스턴트 웹 애플리케이션
 - **Frontend**: Next.js 14 (App Router), React, TailwindCSS
 - **Backend**: Next.js API Routes
 - **Database**: SQLite (Prisma ORM)
-- **AI**: Claude API
+- **AI**: Claude CLI 또는 OpenClaw Gateway (Codex API 연동 가능)
 - **Auth**: NextAuth.js
 
 ## 시작하기
@@ -34,6 +34,15 @@ yarn install
 DATABASE_URL="file:./dev.db"
 NEXTAUTH_SECRET="your-secret-key"
 NEXTAUTH_URL="http://localhost:3000"
+MYSQL_HOST="localhost"
+MYSQL_PORT="3306"
+MYSQL_USER="root"
+MYSQL_PASSWORD=""
+MYSQL_DATABASE=""
+AI_BACKEND="openclaw"
+OPENCLAW_URL="http://127.0.0.1:18789"
+OPENCLAW_GATEWAY_TOKEN="your-gateway-token"
+ZOOPIBOT_SERVICE_TOKEN="your-service-token"
 ```
 
 ### 3. 데이터베이스 초기화
@@ -50,6 +59,34 @@ yarn dev
 ```
 
 브라우저에서 http://localhost:3000 접속
+
+### OpenClaw + Codex API 사용
+
+OpenClaw Gateway를 API처럼 두고, 실제 모델은 Codex API로 붙이려면 아래 순서로 설정합니다.
+
+```bash
+./scripts/setup-openclaw.sh
+```
+
+기본 권장 경로는 `openclaw + Codex API`이며, 스크립트가 다음을 처리합니다.
+
+- Zoopibot `.env` 생성
+- `~/.openclaw/openclaw.json` 생성
+- OpenClaw 기본 모델을 `openai/gpt-5.2-codex`로 설정
+- Gateway `chatCompletions` 엔드포인트 활성화
+
+실행:
+
+```bash
+openclaw gateway
+yarn dev
+```
+
+또는:
+
+```bash
+./scripts/start.sh
+```
 
 ## 프로젝트 구조
 
