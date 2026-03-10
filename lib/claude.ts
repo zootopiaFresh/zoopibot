@@ -4,6 +4,15 @@ import { getUnprocessedFeedbacks, buildFeedbackPrompt } from './feedback';
 import { getFrequentTables, buildFrequentTablesPrompt } from './learning';
 import { logGenerationError } from './error-logger';
 import { runAI, runClaudeCLI } from './ai-runtime';
+import {
+  buildFallbackPresentation,
+  extractJsonObject,
+  type QueryResultSnapshot,
+  type ReportBlock,
+  reportPresentationSchema,
+  type ReportPresentation,
+  toPreferredLabel,
+} from './presentation';
 
 export { runAI, runClaudeCLI } from './ai-runtime';
 
@@ -220,21 +229,7 @@ ${schema ? `DB 스키마:\n${schema}\n\n` : ''}${conversationContext}${dataConte
   let parsed;
   let parseError = false;
   try {
-    // 다양한 JSON 형식 시도
-    // 1. ```json ... ``` 블록 추출
-    const jsonMatch = result.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[1]);
-    } else {
-      // 2. { 로 시작하는 JSON 객체 찾기
-      const jsonObjectMatch = result.match(/\{[\s\S]*"sql"[\s\S]*\}/);
-      if (jsonObjectMatch) {
-        parsed = JSON.parse(jsonObjectMatch[0]);
-      } else {
-        // 3. 전체 텍스트를 JSON으로 파싱 시도
-        parsed = JSON.parse(result);
-      }
-    }
+    parsed = JSON.parse(extractJsonObject(result));
   } catch (e) {
     const errorMessage = (e as Error).message;
     console.warn('[generateSQL] JSON 파싱 실패:', errorMessage);
@@ -279,4 +274,167 @@ ${schema ? `DB 스키마:\n${schema}\n\n` : ''}${conversationContext}${dataConte
     parseError,
     usage: { input: 0, output: 0 }
   };
+}
+
+function sanitizePresentation(
+  presentation: ReportPresentation,
+  snapshot: QueryResultSnapshot,
+  explanation: string,
+  question: string
+): ReportPresentation {
+  const allowedFields = new Set(snapshot.fields.map((field) => field.name));
+  const normalizeDisplayLabel = (label: string | undefined, field: string) => {
+    if (!label || label.trim() === '' || label.trim() === field || !/[가-힣]/.test(label)) {
+      return toPreferredLabel(field);
+    }
+
+    return label;
+  };
+  const blocks: ReportBlock[] = [];
+
+  for (const block of presentation.blocks) {
+    if (block.type === 'metric-row') {
+      const items = block.items.filter((item) => allowedFields.has(item.field));
+      if (items.length > 0) {
+        blocks.push({
+          ...block,
+          items: items.map((item) => ({
+            ...item,
+            label: normalizeDisplayLabel(item.label, item.field),
+          })),
+        });
+      }
+      continue;
+    }
+
+    if (block.type === 'table') {
+      const columns = block.columns.filter((column) => allowedFields.has(column.key));
+      blocks.push({
+        ...block,
+        columns: columns.length > 0
+          ? columns.map((column) => ({
+              ...column,
+              label: normalizeDisplayLabel(column.label, column.key),
+            }))
+          : snapshot.fields.map((field) => ({ key: field.name, label: toPreferredLabel(field.name) })),
+        maxRows: block.maxRows ? Math.min(Math.max(block.maxRows, 1), 100) : 20,
+      });
+      continue;
+    }
+
+    if (block.type === 'vega-lite') {
+      const spec = JSON.parse(JSON.stringify(block.spec));
+      delete spec.data;
+      delete spec.datasets;
+      if (spec.encoding?.x?.field) {
+        spec.encoding.x.title = normalizeDisplayLabel(spec.encoding.x.title, spec.encoding.x.field);
+      }
+      if (spec.encoding?.y?.field) {
+        spec.encoding.y.title = normalizeDisplayLabel(spec.encoding.y.title, spec.encoding.y.field);
+      }
+      if (Array.isArray(spec.encoding?.tooltip)) {
+        spec.encoding.tooltip = spec.encoding.tooltip.map((tooltip: any) => (
+          tooltip?.field
+            ? { ...tooltip, title: normalizeDisplayLabel(tooltip.title, tooltip.field) }
+            : tooltip
+        ));
+      }
+      blocks.push({ ...block, spec });
+      continue;
+    }
+
+    blocks.push(block);
+  }
+
+  const limitedBlocks = blocks.slice(0, 6);
+
+  if (limitedBlocks.length === 0) {
+    return buildFallbackPresentation(question, explanation, snapshot);
+  }
+
+  return {
+    version: 'v1',
+    title: presentation.title,
+    blocks: limitedBlocks,
+  };
+}
+
+export async function generatePresentation(
+  question: string,
+  sql: string,
+  explanation: string,
+  snapshot: QueryResultSnapshot,
+  sessionId?: string
+): Promise<ReportPresentation> {
+  if (snapshot.rows.length === 0) {
+    return buildFallbackPresentation(question, explanation, snapshot);
+  }
+
+  const previewRows = snapshot.rows.slice(0, 20);
+  const prompt = `당신은 BI 리포트 편집자입니다.
+질문과 SQL 결과를 보고 사람이 이해하기 쉬운 블록형 응답 계획 JSON만 반환하세요.
+
+허용 블록:
+- narrative: 짧은 한국어 요약
+- callout: 상태/주의 안내
+- metric-row: 단일 행 결과의 핵심 수치
+- table: 상세 목록 또는 기본 표
+- vega-lite: 시계열/카테고리 집계 차트
+
+중요 규칙:
+- 상세 레코드 목록, 사용자 목록, 주문 목록, 식별자(ID/이메일/전화번호/이름) 중심 데이터는 차트 금지, table을 우선 사용하세요.
+- 기간별 집계는 line 또는 area 계열 spec을 우선 사용하세요.
+- 카테고리별 집계는 bar 계열 spec을 우선 사용하세요.
+- 사용자가 보는 제목, 설명, KPI label, table columns.label, chart axis title, tooltip title은 가능한 한 자연스러운 한국어로 작성하세요.
+- field/key 값은 실제 결과 필드명을 유지하고, 사람이 읽는 label/title만 한글로 바꾸세요.
+- metric-row의 items는 실제 필드명을 field에 넣으세요.
+- table은 rows를 넣지 말고 columns와 maxRows만 정하세요. 프론트가 실제 rows를 주입합니다.
+- vega-lite spec에도 data를 넣지 마세요. 프론트가 data.values를 주입합니다.
+- spec의 field 이름은 반드시 실제 결과 필드명만 사용하세요.
+- blocks는 1~4개만 사용하세요.
+- 확신이 없으면 table을 포함하세요.
+- JSON 외 텍스트를 절대 출력하지 마세요.
+
+반환 형식:
+{
+  "version": "v1",
+  "title": "짧은 제목",
+  "blocks": [
+    { "type": "narrative", "title": "요약", "body": "..." },
+    { "type": "metric-row", "title": "핵심 지표", "items": [{ "label": "활성 구독자", "field": "active_users", "format": "number" }] },
+    { "type": "vega-lite", "title": "추이", "description": "...", "spec": { "$schema": "https://vega.github.io/schema/vega-lite/v5.json", "width": "container", "height": 320, "mark": { "type": "line", "point": true }, "encoding": { "x": { "field": "period", "type": "temporal", "title": "기간" }, "y": { "field": "value", "type": "quantitative", "title": "값" }, "tooltip": [{ "field": "period", "type": "temporal" }, { "field": "value", "type": "quantitative" }] } } },
+    { "type": "table", "title": "상세 목록", "columns": [{ "key": "user_id", "label": "사용자 ID", "format": "text" }], "maxRows": 20 }
+  ]
+}
+
+사용자 질문:
+${question}
+
+SQL:
+${sql}
+
+설명:
+${explanation}
+
+결과 메타:
+- 총 ${snapshot.totalRows}행
+- ${snapshot.truncated ? '상위 100행만 저장됨' : '전체 결과 저장됨'}
+
+결과 필드:
+${JSON.stringify(snapshot.fields, null, 2)}
+
+결과 미리보기:
+${JSON.stringify(previewRows, null, 2)}`;
+
+  try {
+    const raw = await runAI(prompt, {
+      sessionKey: sessionId ? `${sessionId}:presentation` : undefined,
+      timeout: 30000,
+    });
+    const parsed = reportPresentationSchema.parse(JSON.parse(extractJsonObject(raw)));
+    return sanitizePresentation(parsed, snapshot, explanation, question);
+  } catch (error) {
+    console.warn('[generatePresentation] fallback:', error);
+    return buildFallbackPresentation(question, explanation, snapshot);
+  }
 }

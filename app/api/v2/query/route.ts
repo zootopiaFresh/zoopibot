@@ -6,6 +6,8 @@ import { executeQuery } from '@/lib/mysql';
 import { logGenerationError } from '@/lib/error-logger';
 import { updateTableUsage, extractTableNames } from '@/lib/learning';
 import { prisma } from '@/lib/db';
+import { buildPresentationFromSQL } from '@/lib/reporting';
+import { serializePresentation, serializeQueryResult } from '@/lib/presentation';
 import { z } from 'zod';
 
 const requestSchema = z.object({
@@ -73,6 +75,8 @@ export async function POST(req: NextRequest) {
 
     // SQL 생성
     let result = await generateSQL(question, schema, history, undefined, userId, activeSessionId);
+    let presentation;
+    let resultSnapshot;
 
     // Claude가 실제 데이터 확인이 필요한 경우
     if (result.needsData && result.dataQuery) {
@@ -94,12 +98,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    let assistantMessageId: string | null = null;
+
     // 메시지 저장
     if (activeSessionId) {
       await prisma.chatMessage.create({
         data: { role: 'user', content: question, sessionId: activeSessionId },
       });
-      await prisma.chatMessage.create({
+      const assistantMessage = await prisma.chatMessage.create({
         data: {
           role: 'assistant',
           content: result.explanation || '쿼리를 생성했습니다.',
@@ -107,6 +113,7 @@ export async function POST(req: NextRequest) {
           sessionId: activeSessionId,
         },
       });
+      assistantMessageId = assistantMessage.id;
     }
 
     // 테이블 사용 추적
@@ -122,9 +129,11 @@ export async function POST(req: NextRequest) {
     let columns: any[] | undefined;
     if (execute && result.sql) {
       try {
-        const execResult = await executeQuery(result.sql);
-        data = execResult.rows;
-        columns = execResult.fields;
+        const report = await buildPresentationFromSQL(question, result.sql, result.explanation, activeSessionId);
+        presentation = report.presentation;
+        resultSnapshot = report.snapshot;
+        data = report.snapshot.rows;
+        columns = report.snapshot.fields;
       } catch (execError: any) {
         logGenerationError({
           errorType: 'db_query_error',
@@ -135,6 +144,16 @@ export async function POST(req: NextRequest) {
           metadata: { sql: result.sql },
         });
       }
+    }
+
+    if (assistantMessageId && (presentation || resultSnapshot)) {
+      await prisma.chatMessage.update({
+        where: { id: assistantMessageId },
+        data: {
+          presentation: serializePresentation(presentation ?? null),
+          resultSnapshot: serializeQueryResult(resultSnapshot ?? null),
+        },
+      });
     }
 
     // 결과 해석 (옵션)
@@ -157,6 +176,8 @@ ${JSON.stringify(data.slice(0, 20), null, 2)}`;
       explanation: result.explanation,
       data,
       columns,
+      presentation,
+      resultSnapshot,
       interpretation,
       sessionId: activeSessionId,
       parseError: result.parseError || false,
