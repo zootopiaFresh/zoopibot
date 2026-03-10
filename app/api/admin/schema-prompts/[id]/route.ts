@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkAdminAuth } from '@/lib/admin';
 import { prisma } from '@/lib/db';
 import { invalidateSchemaCache } from '@/lib/schema';
+import { normalizeSchemaTagsInput } from '@/lib/schema-taxonomy';
 
 // GET: 스키마 프롬프트 상세 조회
 export async function GET(
@@ -47,7 +48,7 @@ export async function PUT(
 
   try {
     const body = await req.json();
-    const { name, content, isActive } = body;
+    const { name, content, tags, isActive } = body;
 
     // 존재 확인
     const existing = await prisma.schemaPrompt.findUnique({
@@ -64,6 +65,7 @@ export async function PUT(
     const updateData: {
       name?: string;
       content?: string;
+      tags?: string;
       isActive?: boolean;
     } = {};
 
@@ -131,6 +133,25 @@ export async function PUT(
       }
 
       updateData.content = content;
+    }
+
+    if (tags !== undefined) {
+      if (typeof tags !== 'string') {
+        return NextResponse.json(
+          { error: '태그는 문자열이어야 합니다' },
+          { status: 400 }
+        );
+      }
+
+      const normalizedTags = normalizeSchemaTagsInput(tags);
+      if (normalizedTags.length > 500) {
+        return NextResponse.json(
+          { error: '태그는 500자 이하여야 합니다' },
+          { status: 400 }
+        );
+      }
+
+      updateData.tags = normalizedTags;
     }
 
     // 활성화 상태 수정

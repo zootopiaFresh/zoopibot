@@ -184,6 +184,7 @@ model SchemaPrompt {
 
   name      String   @unique   // "01-member", "02-pet" 등 (정렬용)
   content   String             // 마크다운 내용
+  tags      String   @default("") // 분류용 태그 (comma-separated)
   isActive  Boolean  @default(true)
 
   createdAt DateTime @default(now())

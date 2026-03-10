@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateServiceToken, unauthorizedResponse, getUserIdBySlackId } from '@/lib/service-auth';
 import { generateSQL } from '@/lib/claude';
-import { getCachedSchema } from '@/lib/schema';
+import { resolveSchemaContext } from '@/lib/schema-explorer';
 import { executeQuery } from '@/lib/mysql';
 import { logGenerationError } from '@/lib/error-logger';
 import { updateTableUsage, extractTableNames } from '@/lib/learning';
@@ -38,9 +38,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 스키마 로드
-    const schema = await getCachedSchema();
-
     // 세션 히스토리 로드 (있으면)
     let history: { role: 'user' | 'assistant'; content: string; sql?: string }[] = [];
     let activeSessionId = sessionId;
@@ -70,6 +67,9 @@ export async function POST(req: NextRequest) {
       });
       activeSessionId = newSession.id;
     }
+
+    // 현재 질문과 세션 맥락에 맞는 스키마를 도구형 탐색으로 결정
+    const { schema } = await resolveSchemaContext(question, history, activeSessionId);
 
     // SQL 생성
     let result = await generateSQL(question, schema, history, undefined, userId, activeSessionId);

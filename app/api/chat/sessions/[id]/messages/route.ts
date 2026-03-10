@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { generateSQL } from '@/lib/claude';
-import { getCachedSchema } from '@/lib/schema';
+import { resolveSchemaContext } from '@/lib/schema-explorer';
 import { executeQuery } from '@/lib/mysql';
 import { logGenerationError } from '@/lib/error-logger';
 import { z } from 'zod';
@@ -57,10 +57,8 @@ export async function POST(
       sql: msg.sql || undefined
     }));
 
-    // 마크다운 스키마 사용 (schema 폴더)
-    const schema = await getCachedSchema();
-
     const sessionId = params.id;
+    const { schema } = await resolveSchemaContext(content, history, sessionId);
 
     // Claude에게 요청 (사용자 선호도 적용, sessionId 전달)
     let result = await generateSQL(content, schema, history, undefined, userId, sessionId);
