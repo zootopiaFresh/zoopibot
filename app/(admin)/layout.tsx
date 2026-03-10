@@ -23,20 +23,20 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full" />
+      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f3]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#10a37f] border-t-transparent" />
       </div>
     );
   }
 
   if (status === 'authenticated' && (session?.user as any)?.role !== 'admin') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f3]">
         <div className="text-center">
-          <p className="text-gray-500 mb-4">접근 권한이 없습니다</p>
+          <p className="mb-4 text-[#6e6e80]">접근 권한이 없습니다</p>
           <button
             onClick={() => router.push('/query-generator')}
-            className="text-indigo-600 hover:text-indigo-700"
+            className="text-[#10a37f] hover:text-[#0e8b6c]"
           >
             돌아가기
           </button>
@@ -46,7 +46,7 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex bg-gray-100">
+    <div className="flex min-h-screen bg-[#f7f7f3]">
       <AdminSidebar />
       <main className="flex-1 p-6 overflow-auto">
         {children}

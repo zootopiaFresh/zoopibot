@@ -10,7 +10,7 @@ interface StatsCardProps {
 
 export function StatsCard({ title, value, icon, trend, subtitle }: StatsCardProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="rounded-2xl border border-[#e6e9e3] bg-white/90 p-6 shadow-[0_16px_36px_rgba(15,23,42,0.06)]">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-500">{title}</p>
@@ -35,7 +35,7 @@ export function StatsCard({ title, value, icon, trend, subtitle }: StatsCardProp
             </div>
           )}
         </div>
-        <div className="p-3 bg-indigo-100 rounded-lg text-indigo-600">
+        <div className="rounded-2xl bg-[#eefaf6] p-3 text-[#10a37f]">
           {icon}
         </div>
       </div>

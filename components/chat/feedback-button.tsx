@@ -70,7 +70,7 @@ export function FeedbackButton({ sessionId, messageId, onFeedbackSent }: Feedbac
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#8e8ea0] transition-colors hover:bg-[#f7f7f8] hover:text-[#0d0d0d]"
         title="피드백 보내기"
       >
         <MessageSquarePlus className="w-4 h-4" />
@@ -78,12 +78,12 @@ export function FeedbackButton({ sessionId, messageId, onFeedbackSent }: Feedbac
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full right-0 mb-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-10">
+        <div className="absolute bottom-full right-0 z-10 mb-2 w-80 rounded-2xl border border-[#e5e5e5] bg-white p-4 shadow-[0_16px_40px_rgba(13,13,13,0.12)]">
           <div className="flex justify-between items-center mb-3">
-            <h4 className="text-sm font-medium text-gray-800">피드백 보내기</h4>
+            <h4 className="text-sm font-medium text-[#0d0d0d]">피드백 보내기</h4>
             <button
               onClick={() => setIsOpen(false)}
-              className="p-1 text-gray-400 hover:text-gray-600 rounded"
+              className="rounded p-1 text-[#8e8ea0] transition-colors hover:text-[#0d0d0d]"
             >
               <X className="w-4 h-4" />
             </button>
@@ -95,10 +95,10 @@ export function FeedbackButton({ sessionId, messageId, onFeedbackSent }: Feedbac
                 <button
                   key={opt.type}
                   onClick={() => setSelectedType(opt.type)}
-                  className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                  className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
                     selectedType === opt.type
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
+                      ? 'border-[#10a37f] bg-[#10a37f] text-white'
+                      : 'border-[#d9d9df] bg-white text-[#6f6f7b] hover:border-[#10a37f]/40 hover:text-[#0d0d0d]'
                   }`}
                 >
                   {opt.label}
@@ -112,13 +112,13 @@ export function FeedbackButton({ sessionId, messageId, onFeedbackSent }: Feedbac
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                   placeholder={FEEDBACK_OPTIONS.find((o) => o.type === selectedType)?.placeholder}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full resize-none rounded-xl border border-[#d9d9df] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#10a37f]/20"
                   rows={3}
                 />
                 <button
                   onClick={handleSubmit}
                   disabled={!feedback.trim() || sending}
-                  className="w-full py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                  className="w-full rounded-xl bg-[#0d0d0d] py-2 text-sm text-white transition-colors hover:bg-[#2d2d2d] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {sending ? '전송 중...' : '피드백 보내기'}
                 </button>
