@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs/promises';
 import path from 'path';
+import { getDefaultSchemaTags } from '../lib/schema-taxonomy';
 
 const prisma = new PrismaClient();
 
@@ -40,6 +41,7 @@ async function main() {
       data: {
         name,
         content,
+        tags: getDefaultSchemaTags(name).join(', '),
         isActive: true,
       },
     });

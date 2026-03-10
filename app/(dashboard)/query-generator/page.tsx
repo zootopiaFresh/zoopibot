@@ -31,6 +31,8 @@ import {
 } from 'lucide-react';
 
 import { FeedbackButton, QuickFeedback } from '@/components/chat/feedback-button';
+import { ReportRenderer } from '@/components/chat/report-renderer';
+import type { QueryResultSnapshot, ReportPresentation } from '@/lib/presentation';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -39,6 +41,8 @@ interface Message {
   content: string;
   sql?: string | null;
   parseError?: boolean;
+  presentation?: ReportPresentation | null;
+  resultSnapshot?: QueryResultSnapshot | null;
   createdAt?: string;
 }
 
@@ -77,6 +81,207 @@ function formatSessionDate(updatedAt: string) {
     month: 'short',
     day: 'numeric',
   }).format(date);
+}
+
+interface QueryResult {
+  rows: Record<string, unknown>[];
+  fields: { name: string }[];
+  totalRows: number;
+  truncated: boolean;
+  presentation?: ReportPresentation | null;
+  resultSnapshot?: QueryResultSnapshot | null;
+}
+
+interface QueryResultError {
+  error: string;
+}
+
+interface ChartPoint {
+  label: string;
+  value: number;
+}
+
+function toDisplayText(value: unknown) {
+  if (value === null || value === undefined) return 'NULL';
+  if (typeof value === 'number') {
+    return Number.isInteger(value)
+      ? value.toLocaleString('ko-KR')
+      : value.toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+  }
+  return String(value);
+}
+
+function toNumericValue(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim().replace(/,/g, '');
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function isDateLike(value: unknown) {
+  if (value instanceof Date) return true;
+  if (typeof value !== 'string') return false;
+  return !Number.isNaN(Date.parse(value));
+}
+
+function isSqlOnlyRequest(input: string) {
+  return /sql만|쿼리만|문장만|실행하지\s*마|실행 없이|only sql|sql only/i.test(input);
+}
+
+function buildVisualization(result: QueryResult) {
+  const rows = result.rows;
+  const fields = result.fields;
+
+  if (rows.length === 0) {
+    return { type: 'empty' as const };
+  }
+
+  const numericFields = fields.filter(
+    (field) =>
+      rows.some((row) => toNumericValue(row[field.name]) !== null) &&
+      rows.every(
+        (row) =>
+          row[field.name] === null ||
+          row[field.name] === undefined ||
+          toNumericValue(row[field.name]) !== null
+      )
+  );
+
+  const dimensionFields = fields.filter(
+    (field) => !numericFields.some((numericField) => numericField.name === field.name)
+  );
+
+  if (rows.length === 1 && numericFields.length > 0) {
+    return {
+      type: 'metric' as const,
+      metrics: numericFields.map((field) => ({
+        label: field.name,
+        value: toNumericValue(rows[0][field.name]) ?? 0,
+      })),
+    };
+  }
+
+  if (numericFields.length > 0 && dimensionFields.length > 0) {
+    const xField = dimensionFields[0];
+    const yField = numericFields[0];
+    const points: ChartPoint[] = rows
+      .map((row) => ({
+        label: toDisplayText(row[xField.name]),
+        value: toNumericValue(row[yField.name]),
+      }))
+      .filter((point): point is ChartPoint => point.value !== null)
+      .slice(0, 12);
+
+    if (points.length >= 2) {
+      return {
+        type: isDateLike(rows[0][xField.name]) ? ('line' as const) : ('bar' as const),
+        points,
+      };
+    }
+  }
+
+  return { type: 'table' as const };
+}
+
+function renderLineChart(points: ChartPoint[]) {
+  const width = 640;
+  const height = 220;
+  const padding = 24;
+  const maxValue = Math.max(...points.map((point) => point.value), 1);
+  const minValue = Math.min(...points.map((point) => point.value), 0);
+  const range = maxValue - minValue || 1;
+  const chartPoints = points.map((point, index) => {
+    const x = padding + (index * (width - padding * 2)) / Math.max(points.length - 1, 1);
+    const y =
+      height - padding - ((point.value - minValue) / range) * (height - padding * 2);
+    return { ...point, x, y };
+  });
+  const polyline = chartPoints.map((point) => `${point.x},${point.y}`).join(' ');
+
+  return (
+    <div className="rounded-3xl border border-[#dcefe8] bg-white p-4 shadow-[0_12px_28px_rgba(16,163,127,0.08)]">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-sm font-medium text-[#0d0d0d]">추이 그래프</span>
+        <span className="text-xs text-[#6f6f7b]">상위 {points.length}개 포인트</span>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-56 w-full">
+        <line
+          x1={padding}
+          y1={height - padding}
+          x2={width - padding}
+          y2={height - padding}
+          stroke="#d1d5db"
+          strokeWidth="1"
+        />
+        <line
+          x1={padding}
+          y1={padding}
+          x2={padding}
+          y2={height - padding}
+          stroke="#d1d5db"
+          strokeWidth="1"
+        />
+        <polyline fill="none" stroke="#10a37f" strokeWidth="3" points={polyline} />
+        {chartPoints.map((point) => (
+          <g key={`${point.label}-${point.value}`}>
+            <circle cx={point.x} cy={point.y} r="4" fill="#10a37f" />
+            <text
+              x={point.x}
+              y={point.y - 10}
+              textAnchor="middle"
+              fontSize="10"
+              fill="#6f6f7b"
+            >
+              {toDisplayText(point.value)}
+            </text>
+          </g>
+        ))}
+      </svg>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[#6f6f7b] sm:grid-cols-4">
+        {points.map((point) => (
+          <div
+            key={`${point.label}-${point.value}`}
+            className="truncate rounded-full bg-[#f7f7f8] px-3 py-1.5"
+          >
+            {point.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function renderBarChart(points: ChartPoint[]) {
+  const maxValue = Math.max(...points.map((point) => point.value), 1);
+
+  return (
+    <div className="rounded-3xl border border-[#dcefe8] bg-white p-4 shadow-[0_12px_28px_rgba(16,163,127,0.08)]">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-sm font-medium text-[#0d0d0d]">비교 그래프</span>
+        <span className="text-xs text-[#6f6f7b]">상위 {points.length}개 항목</span>
+      </div>
+      <div className="space-y-3">
+        {points.map((point) => (
+          <div key={`${point.label}-${point.value}`} className="space-y-1">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="truncate text-[#6f6f7b]">{point.label}</span>
+              <span className="font-medium text-[#0d0d0d]">{toDisplayText(point.value)}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-[#eef2f1]">
+              <div
+                className="h-full rounded-full bg-[#10a37f]"
+                style={{ width: `${Math.max((point.value / maxValue) * 100, 4)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function CodeBlock({ children, ...props }: any) {
@@ -173,6 +378,11 @@ export default function QueryGeneratorPage() {
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [executingQuery, setExecutingQuery] = useState<string | null>(null);
+  const [queryResults, setQueryResults] = useState<
+    Record<string, QueryResult | QueryResultError>
+  >({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isSubmitting = useRef(false);
@@ -211,7 +421,7 @@ export default function QueryGeneratorPage() {
       behavior: messages.length > 0 ? 'smooth' : 'auto',
       block: 'end',
     });
-  }, [messages]);
+  }, [messages, queryResults]);
 
   useEffect(() => {
     if (!textareaRef.current) {
@@ -246,6 +456,7 @@ export default function QueryGeneratorPage() {
 
       setCurrentSessionId(sessionId);
       setMessages(data.session.messages);
+      setQueryResults({});
 
       if (!isDesktop) {
         setSidebarOpen(false);
@@ -264,6 +475,7 @@ export default function QueryGeneratorPage() {
       if (currentSessionId === sessionId) {
         setCurrentSessionId(null);
         setMessages([]);
+        setQueryResults({});
       }
 
       fetchSessions();
@@ -313,7 +525,10 @@ export default function QueryGeneratorPage() {
       const response = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: userContent }),
+        body: JSON.stringify({
+          content: userContent,
+          autoExecute: !isSqlOnlyRequest(userContent),
+        }),
       });
       const data = await response.json();
 
@@ -321,17 +536,17 @@ export default function QueryGeneratorPage() {
         throw new Error(data.error || '오류가 발생했습니다.');
       }
 
+      const assistantMessage: Message = {
+        ...data.assistantMessage,
+        sql: data.assistantMessage.sql || null,
+        parseError: data.assistantMessage.parseError || false,
+        presentation: data.assistantMessage.presentation || null,
+        resultSnapshot: data.assistantMessage.resultSnapshot || null,
+      };
+
       setMessages((previous) => {
         const filtered = previous.filter((message) => message.id !== tempUserMessageId);
-        return [
-          ...filtered,
-          data.userMessage,
-          {
-            ...data.assistantMessage,
-            sql: data.assistantMessage.sql || null,
-            parseError: data.assistantMessage.parseError || false,
-          },
-        ];
+        return [...filtered, data.userMessage, assistantMessage];
       });
 
       fetchSessions();
@@ -356,6 +571,64 @@ export default function QueryGeneratorPage() {
     void submitMessage();
   };
 
+  const executeQuery = async (messageId: string, sql: string, question?: string, explanation?: string) => {
+    setExecutingQuery(messageId);
+    try {
+      const response = await fetch('/api/sql/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sql,
+          question,
+          explanation,
+          sessionId: currentSessionId,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setQueryResults((previous) => ({
+          ...previous,
+          [messageId]: { error: data.error || '쿼리를 실행하지 못했습니다.' },
+        }));
+        return;
+      }
+
+      setMessages((previous) =>
+        previous.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                presentation: data.presentation || message.presentation || null,
+                resultSnapshot: data.resultSnapshot || message.resultSnapshot || null,
+              }
+            : message
+        )
+      );
+
+      if (data.presentation && data.resultSnapshot) {
+        setQueryResults((previous) => {
+          const next = { ...previous };
+          delete next[messageId];
+          return next;
+        });
+        return;
+      }
+
+      setQueryResults((previous) => ({
+        ...previous,
+        [messageId]: data as QueryResult,
+      }));
+    } catch (error) {
+      setQueryResults((previous) => ({
+        ...previous,
+        [messageId]: { error: '쿼리 실행 중 오류가 발생했습니다.' },
+      }));
+    } finally {
+      setExecutingQuery(null);
+    }
+  };
+
   const handleTextareaKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -363,14 +636,138 @@ export default function QueryGeneratorPage() {
     }
   };
 
+  const copyToClipboard = async (text: string, id: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    window.setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const handleNewChat = () => {
     setCurrentSessionId(null);
     setMessages([]);
+    setQueryResults({});
     setInput('');
 
     if (!isDesktop) {
       setSidebarOpen(false);
     }
+  };
+
+  const getQuestionForAssistant = (index: number) => {
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      if (messages[cursor]?.role === 'user') {
+        return messages[cursor].content;
+      }
+    }
+
+    return '';
+  };
+
+  const renderQueryResult = (messageId: string) => {
+    const result = queryResults[messageId];
+    if (!result) return null;
+
+    if ('error' in result) {
+      return (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {result.error}
+        </div>
+      );
+    }
+
+    const visualization = buildVisualization(result);
+
+    return (
+      <div className="space-y-3">
+        {visualization.type === 'metric' && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {visualization.metrics.map((metric) => (
+              <div
+                key={metric.label}
+                className="rounded-[24px] border border-[#dcefe8] bg-[linear-gradient(180deg,#f5fbf8_0%,#ffffff_100%)] p-4 shadow-[0_10px_24px_rgba(16,163,127,0.08)]"
+              >
+                <div className="text-xs font-medium uppercase tracking-wide text-[#10a37f]">
+                  {metric.label}
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-[#0d0d0d]">
+                  {toDisplayText(metric.value)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {visualization.type === 'bar' && renderBarChart(visualization.points)}
+        {visualization.type === 'line' && renderLineChart(visualization.points)}
+
+        <div className="overflow-hidden rounded-[24px] border border-[#e5e5e5] bg-white shadow-[0_10px_24px_rgba(13,13,13,0.04)]">
+          <div className="flex items-center justify-between border-b border-[#e5e5e5] bg-[#f7f7f8] px-4 py-3">
+            <span className="text-xs text-[#6f6f7b]">
+              결과: {result.totalRows}행 {result.truncated && '(100개만 표시)'}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const csv = [
+                  result.fields.map((field) => field.name).join(','),
+                  ...result.rows.map((row) =>
+                    result.fields.map((field) => row[field.name]).join(',')
+                  ),
+                ].join('\n');
+                void copyToClipboard(csv, `csv-${messageId}`);
+              }}
+              className={cn(
+                'inline-flex items-center gap-1 text-xs transition-colors',
+                copiedId === `csv-${messageId}`
+                  ? 'text-[#10a37f]'
+                  : 'text-[#6f6f7b] hover:text-[#0d0d0d]'
+              )}
+            >
+              {copiedId === `csv-${messageId}` ? (
+                <>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  복사됨
+                </>
+              ) : (
+                'CSV 복사'
+              )}
+            </button>
+          </div>
+          <div className="max-h-64 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-[#f7f7f8]">
+                <tr>
+                  {result.fields.map((field) => (
+                    <th
+                      key={field.name}
+                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-[0.12em] text-[#8e8ea0]"
+                    >
+                      {field.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#efefef]">
+                {result.rows.map((row, index) => (
+                  <tr key={index} className="hover:bg-[#fafafa]">
+                    {result.fields.map((field) => (
+                      <td
+                        key={`${index}-${field.name}`}
+                        className="whitespace-nowrap px-4 py-3 text-[#0d0d0d]"
+                      >
+                        {toDisplayText(row[field.name])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const currentSessionTitle =
@@ -565,7 +962,7 @@ export default function QueryGeneratorPage() {
             </div>
           ) : (
             <div className="mx-auto max-w-[760px] px-4 py-6 sm:py-8">
-              {messages.map((message) => (
+              {messages.map((message, index) => (
                 <div
                   key={message.id}
                   className={cn('mb-8', message.role === 'user' ? 'flex justify-end' : '')}
@@ -581,6 +978,45 @@ export default function QueryGeneratorPage() {
                       </div>
 
                       <div className="min-w-0 flex-1 space-y-4">
+                        {message.sql ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void executeQuery(
+                                  message.id,
+                                  message.sql!,
+                                  getQuestionForAssistant(index),
+                                  message.content
+                                )
+                              }
+                              disabled={executingQuery === message.id}
+                              className="inline-flex items-center gap-2 rounded-full bg-[#10a37f] px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0e8f70] disabled:cursor-not-allowed disabled:bg-[#b7c5c1]"
+                            >
+                              {executingQuery === message.id
+                                ? '리포트 준비 중...'
+                                : (message.presentation && message.resultSnapshot) ||
+                                    queryResults[message.id]
+                                  ? '다시 실행'
+                                  : '리포트 보기'}
+                            </button>
+                            <span className="text-xs text-[#8e8ea0]">
+                              AI가 표, 요약, 차트 블록을 구성하고 SQL은 아래 카드에 유지합니다.
+                            </span>
+                          </div>
+                        ) : null}
+
+                        {message.presentation && message.resultSnapshot ? (
+                          <ReportRenderer
+                            presentation={message.presentation}
+                            snapshot={message.resultSnapshot}
+                          />
+                        ) : null}
+
+                        {message.sql && !message.presentation
+                          ? renderQueryResult(message.id)
+                          : null}
+
                         {message.sql ? <SqlCard sql={message.sql} /> : null}
 
                         {message.parseError ? (
@@ -589,7 +1025,7 @@ export default function QueryGeneratorPage() {
                           </div>
                         ) : null}
 
-                        <div className="prose prose-neutral max-w-none text-[15px] leading-7 text-[#0d0d0d] prose-p:my-0 prose-p:leading-7 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-[#0d0d0d] prose-code:rounded prose-code:bg-[#f7f7f8] prose-code:px-1 prose-code:py-0.5 prose-code:text-[#0d0d0d] prose-code:before:content-none prose-code:after:content-none prose-pre:bg-transparent prose-pre:p-0">
+                        <div className="prose prose-neutral max-w-none text-[15px] leading-7 text-[#0d0d0d] prose-p:my-0 prose-p:leading-7 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-[#0d0d0d] prose-code:rounded prose-code:bg-[#f7f7f8] prose-code:px-1 prose-code:py-0.5 prose-code:text-[#0d0d0d] prose-code:before:content-none prose-code:after:content-none prose-pre:bg-transparent prose-pre:p-0 prose-table:border-collapse prose-th:border prose-th:border-[#e5e5e5] prose-th:bg-[#f7f7f8] prose-th:px-3 prose-th:py-2 prose-th:text-left prose-td:border prose-td:border-[#e5e5e5] prose-td:px-3 prose-td:py-2">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={{

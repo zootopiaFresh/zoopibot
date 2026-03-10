@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { executeQuery } from '@/lib/mysql';
+import { buildPresentationFromSQL } from '@/lib/reporting';
 import { z } from 'zod';
 
 const requestSchema = z.object({
-  sql: z.string().min(1).max(10000)
+  sql: z.string().min(1).max(10000),
+  question: z.string().min(1).max(10000).optional(),
+  explanation: z.string().max(10000).optional(),
+  sessionId: z.string().optional(),
 });
 
 // POST: SQL 쿼리 실행 (SELECT만)
@@ -17,7 +21,26 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { sql } = requestSchema.parse(body);
+    const { sql, question, explanation, sessionId } = requestSchema.parse(body);
+
+    if (question) {
+      const report = await buildPresentationFromSQL(
+        question,
+        sql,
+        explanation || '쿼리 실행 결과입니다.',
+        sessionId
+      );
+
+      return NextResponse.json({
+        success: true,
+        rows: report.snapshot.rows,
+        fields: report.snapshot.fields,
+        totalRows: report.snapshot.totalRows,
+        truncated: report.snapshot.truncated,
+        presentation: report.presentation,
+        resultSnapshot: report.snapshot,
+      });
+    }
 
     const result = await executeQuery(sql);
 

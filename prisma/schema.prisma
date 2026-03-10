@@ -167,6 +167,8 @@ model ChatMessage {
   role      String   // "user" | "assistant"
   content   String   // 사용자 질문 또는 설명
   sql       String?  // 생성된 SQL (assistant만)
+  presentation String? // AI가 결정한 렌더 블록 JSON
+  resultSnapshot String? // 실행 결과 스냅샷 JSON
 
   sessionId String
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -184,6 +186,7 @@ model SchemaPrompt {
 
   name      String   @unique   // "01-member", "02-pet" 등 (정렬용)
   content   String             // 마크다운 내용
+  tags      String   @default("") // 분류용 태그 (comma-separated)
   isActive  Boolean  @default(true)
 
   createdAt DateTime @default(now())

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { generateSQL } from '@/lib/claude';
 import { prisma } from '@/lib/db';
-import { getCachedSchema } from '@/lib/schema';
+import { resolveSchemaContext } from '@/lib/schema-explorer';
 import { z } from 'zod';
 
 const requestSchema = z.object({
@@ -22,8 +22,7 @@ export async function POST(req: NextRequest) {
 
     const userId = (session.user as any).id;
 
-    // schema 폴더에서 자동으로 스키마 로드
-    const schema = await getCachedSchema();
+    const { schema } = await resolveSchemaContext(prompt);
     const result = await generateSQL(prompt, schema, undefined, undefined, userId);
 
     // 히스토리 저장

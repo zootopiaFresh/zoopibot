@@ -3,13 +3,16 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { generateSQL } from '@/lib/claude';
-import { getCachedSchema } from '@/lib/schema';
+import { resolveSchemaContext } from '@/lib/schema-explorer';
 import { executeQuery } from '@/lib/mysql';
 import { logGenerationError } from '@/lib/error-logger';
+import { parseStoredPresentation, parseStoredQueryResult, serializePresentation, serializeQueryResult } from '@/lib/presentation';
+import { buildPresentationFromSQL } from '@/lib/reporting';
 import { z } from 'zod';
 
 const requestSchema = z.object({
-  content: z.string().min(1).max(10000)
+  content: z.string().min(1).max(10000),
+  autoExecute: z.boolean().default(true),
 });
 
 // POST: 메시지 추가 및 응답 생성
@@ -25,7 +28,7 @@ export async function POST(
 
     const userId = (session.user as any).id;
     const body = await req.json();
-    const { content } = requestSchema.parse(body);
+    const { content, autoExecute } = requestSchema.parse(body);
 
     // 세션 확인
     const chatSession = await prisma.chatSession.findFirst({
@@ -57,13 +60,13 @@ export async function POST(
       sql: msg.sql || undefined
     }));
 
-    // 마크다운 스키마 사용 (schema 폴더)
-    const schema = await getCachedSchema();
-
     const sessionId = params.id;
+    const { schema } = await resolveSchemaContext(content, history, sessionId);
 
     // Claude에게 요청 (사용자 선호도 적용, sessionId 전달)
     let result = await generateSQL(content, schema, history, undefined, userId, sessionId);
+    let presentation = null;
+    let resultSnapshot = null;
 
     // Claude가 실제 데이터 확인이 필요하다고 판단한 경우
     if (result.needsData && result.dataQuery) {
@@ -101,12 +104,32 @@ export async function POST(
       }
     }
 
+    if (autoExecute && result.sql) {
+      try {
+        const report = await buildPresentationFromSQL(content, result.sql, result.explanation, sessionId);
+        presentation = report.presentation;
+        resultSnapshot = report.snapshot;
+      } catch (queryError: any) {
+        console.error('[Chat API] Report build failed:', queryError.message);
+        logGenerationError({
+          errorType: 'db_query_error',
+          errorMessage: `자동 실행 실패: ${queryError.message}`,
+          userId,
+          sessionId,
+          prompt: content,
+          metadata: { sql: result.sql },
+        });
+      }
+    }
+
     // 어시스턴트 메시지 저장
     const assistantMessage = await prisma.chatMessage.create({
       data: {
         role: 'assistant',
         content: result.explanation || '쿼리를 생성했습니다.',
         sql: result.sql || null,
+        presentation: serializePresentation(presentation),
+        resultSnapshot: serializeQueryResult(resultSnapshot),
         sessionId: params.id
       }
     });
@@ -132,7 +155,9 @@ export async function POST(
         ...assistantMessage,
         sql: result.sql,
         explanation: result.explanation,
-        parseError: result.parseError || false
+        parseError: result.parseError || false,
+        presentation: parseStoredPresentation(assistantMessage.presentation),
+        resultSnapshot: parseStoredQueryResult(assistantMessage.resultSnapshot),
       }
     });
   } catch (error) {
