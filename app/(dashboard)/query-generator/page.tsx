@@ -1,16 +1,44 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
+import Link from 'next/link';
+import { signOut, useSession } from 'next-auth/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { QuickFeedback, FeedbackButton } from '@/components/chat/feedback-button';
+import {
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Copy,
+  Globe,
+  LogOut,
+  MessageCircle,
+  PanelLeft,
+  PanelLeftClose,
+  Paperclip,
+  Plus,
+  Settings,
+  Shield,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
+
+import { FeedbackButton, QuickFeedback } from '@/components/chat/feedback-button';
+import { cn } from '@/lib/utils';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   sql?: string | null;
-  parseError?: boolean;  // SQL 파싱 실패 플래그
+  parseError?: boolean;
   createdAt?: string;
 }
 
@@ -20,11 +48,35 @@ interface ChatSession {
   updatedAt: string;
 }
 
-interface QueryResult {
-  rows: any[];
-  fields: { name: string }[];
-  totalRows: number;
-  truncated: boolean;
+const SUGGESTED_PROMPTS = [
+  '전체 회원수와 MAU, DAU를 확인해줘',
+  '지난 30일간 신규 가입자 수를 일자별로 보여줘',
+  '가장 많이 팔린 상품 TOP 10을 알려줘',
+  '이번 달 주문 금액 합계를 계산해줘',
+];
+
+function formatSessionDate(updatedAt: string) {
+  const date = new Date(updatedAt);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) {
+    return '오늘';
+  }
+
+  if (date.toDateString() === yesterday.toDateString()) {
+    return '어제';
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
 }
 
 function CodeBlock({ children, ...props }: any) {
@@ -32,72 +84,122 @@ function CodeBlock({ children, ...props }: any) {
   const codeElement = children?.props?.children;
   const codeText = typeof codeElement === 'string' ? codeElement : String(codeElement || '');
   const className = children?.props?.className || '';
-  const language = className.replace('language-', '') || 'Code';
+  const language = className.replace('language-', '') || 'code';
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(codeText);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(codeText);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="not-prose bg-gray-900 rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-800">
-        <span className="text-xs text-gray-400">{language.toUpperCase()}</span>
+    <div className="not-prose overflow-hidden rounded-2xl border border-[#e5e5e5] bg-[#1e1e1e] shadow-[0_14px_28px_rgba(13,13,13,0.08)]">
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-4 py-2.5">
+        <span className="text-xs uppercase tracking-[0.18em] text-[#8e8ea0]">{language}</span>
         <button
+          type="button"
           onClick={handleCopy}
-          className={`text-xs transition-colors flex items-center gap-1 ${
-            copied ? 'text-green-400' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          {copied ? (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              복사됨
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              복사
-            </>
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-colors',
+            copied ? 'text-[#10a37f]' : 'text-[#c5c5d2] hover:bg-white/[0.06] hover:text-white'
           )}
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? '복사됨' : '복사'}
         </button>
       </div>
-      <pre className="p-4 text-sm text-green-400 overflow-x-auto" {...props}>
+      <pre className="overflow-x-auto p-4 text-sm leading-6 text-[#d4d4d4]" {...props}>
         {children}
       </pre>
     </div>
   );
 }
 
+function SqlCard({ sql }: { sql: string }) {
+  const [expanded, setExpanded] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(sql);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="overflow-hidden rounded-2xl bg-[#1e1e1e] shadow-[0_18px_36px_rgba(13,13,13,0.1)]">
+      <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="inline-flex items-center gap-2 text-sm text-[#c5c5d2] transition-colors hover:text-white"
+        >
+          <Sparkles className="h-4 w-4 text-[#10a37f]" />
+          <span>sql</span>
+          <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} />
+        </button>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-colors',
+            copied ? 'text-[#10a37f]' : 'text-[#8e8ea0] hover:bg-white/[0.06] hover:text-white'
+          )}
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? '복사됨' : '복사'}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="px-4 pb-4 pt-3">
+          <pre className="overflow-x-auto text-sm leading-6 text-[#d4d4d4]">
+            <code>{sql}</code>
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function QueryGeneratorPage() {
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as any)?.role === 'admin';
+  const userInitial = session?.user?.email?.charAt(0).toUpperCase() || 'U';
+
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // 기본적으로 닫힘
-  const [executingQuery, setExecutingQuery] = useState<string | null>(null);
-  const [queryResults, setQueryResults] = useState<Record<string, QueryResult | { error: string }>>({});
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isSubmitting = useRef(false);
+  const wasDesktop = useRef(false);
 
-  // 데스크톱에서는 사이드바 기본 열림
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+
+    const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      const desktop = event.matches;
+      setIsDesktop(desktop);
+
+      if (desktop && !wasDesktop.current) {
         setSidebarOpen(true);
       }
+
+      if (!desktop && wasDesktop.current) {
+        setSidebarOpen(false);
+      }
+
+      wasDesktop.current = desktop;
     };
-    handleResize(); // 초기 실행
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    handleChange(mediaQuery);
+    mediaQuery.addEventListener('change', handleChange);
+
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
   useEffect(() => {
@@ -105,20 +207,26 @@ export default function QueryGeneratorPage() {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, queryResults]);
+    messagesEndRef.current?.scrollIntoView({
+      behavior: messages.length > 0 ? 'smooth' : 'auto',
+      block: 'end',
+    });
+  }, [messages]);
 
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
+    if (!textareaRef.current) {
+      return;
     }
+
+    textareaRef.current.style.height = 'auto';
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
   }, [input]);
 
   const fetchSessions = async () => {
     try {
-      const res = await fetch('/api/chat/sessions');
-      const data = await res.json();
+      const response = await fetch('/api/chat/sessions');
+      const data = await response.json();
+
       if (data.sessions) {
         setSessions(data.sessions);
       }
@@ -129,104 +237,113 @@ export default function QueryGeneratorPage() {
 
   const loadSession = async (sessionId: string) => {
     try {
-      const res = await fetch(`/api/chat/sessions/${sessionId}`);
-      const data = await res.json();
-      if (data.session) {
-        setCurrentSessionId(sessionId);
-        setMessages(data.session.messages);
-        setQueryResults({});
+      const response = await fetch(`/api/chat/sessions/${sessionId}`);
+      const data = await response.json();
+
+      if (!data.session) {
+        return;
+      }
+
+      setCurrentSessionId(sessionId);
+      setMessages(data.session.messages);
+
+      if (!isDesktop) {
+        setSidebarOpen(false);
       }
     } catch (error) {
       console.error('Failed to load session:', error);
     }
   };
 
-  const deleteSession = async (sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const deleteSession = async (sessionId: string, event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+
     try {
       await fetch(`/api/chat/sessions/${sessionId}`, { method: 'DELETE' });
+
       if (currentSessionId === sessionId) {
         setCurrentSessionId(null);
         setMessages([]);
-        setQueryResults({});
       }
+
       fetchSessions();
     } catch (error) {
       console.error('Failed to delete session:', error);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || loading || isSubmitting.current) return;
-
-    isSubmitting.current = true;
-    let sessionId = currentSessionId;
-
-    if (!sessionId) {
-      try {
-        const res = await fetch('/api/chat/sessions', { method: 'POST' });
-        const data = await res.json();
-        sessionId = data.session.id;
-        setCurrentSessionId(sessionId);
-      } catch (error) {
-        console.error('Failed to create session:', error);
-        return;
-      }
+  const submitMessage = async () => {
+    if (!input.trim() || loading || isSubmitting.current) {
+      return;
     }
 
-    const userContent = input.trim();
-    const tempUserMessage: Message = {
-      id: 'temp-user-' + Date.now(),
-      role: 'user',
-      content: userContent,
-    };
-
-    setMessages(prev => [...prev, tempUserMessage]);
-    setInput('');
+    isSubmitting.current = true;
     setLoading(true);
 
+    let tempUserMessageId: string | null = null;
+
     try {
-      const res = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
+      let sessionId = currentSessionId;
+
+      if (!sessionId) {
+        const sessionResponse = await fetch('/api/chat/sessions', { method: 'POST' });
+        const sessionData = await sessionResponse.json();
+
+        if (!sessionResponse.ok || !sessionData.session?.id) {
+          throw new Error(sessionData.error || '새 대화를 만들지 못했습니다.');
+        }
+
+        sessionId = sessionData.session.id;
+        setCurrentSessionId(sessionId);
+      }
+
+      const userContent = input.trim();
+      tempUserMessageId = `temp-user-${Date.now()}`;
+
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: tempUserMessageId!,
+          role: 'user',
+          content: userContent,
+        },
+      ]);
+      setInput('');
+
+      const response = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: userContent }),
       });
+      const data = await response.json();
 
-      const data = await res.json();
-
-      if (res.ok) {
-        setMessages(prev => {
-          const filtered = prev.filter(m => m.id !== tempUserMessage.id);
-          return [
-            ...filtered,
-            data.userMessage,
-            {
-              ...data.assistantMessage,
-              sql: data.assistantMessage.sql || null,
-              parseError: data.assistantMessage.parseError || false,
-            }
-          ];
-        });
-        fetchSessions();
-      } else {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: 'error-' + Date.now(),
-            role: 'assistant',
-            content: data.error || '오류가 발생했습니다.',
-          }
-        ]);
+      if (!response.ok) {
+        throw new Error(data.error || '오류가 발생했습니다.');
       }
+
+      setMessages((previous) => {
+        const filtered = previous.filter((message) => message.id !== tempUserMessageId);
+        return [
+          ...filtered,
+          data.userMessage,
+          {
+            ...data.assistantMessage,
+            sql: data.assistantMessage.sql || null,
+            parseError: data.assistantMessage.parseError || false,
+          },
+        ];
+      });
+
+      fetchSessions();
     } catch (error) {
-      setMessages(prev => [
-        ...prev,
+      console.error('Failed to send message:', error);
+      setMessages((previous) => [
+        ...previous,
         {
-          id: 'error-' + Date.now(),
+          id: `error-${Date.now()}`,
           role: 'assistant',
-          content: '네트워크 오류가 발생했습니다.',
-        }
+          content: error instanceof Error ? error.message : '오류가 발생했습니다.',
+        },
       ]);
     } finally {
       setLoading(false);
@@ -234,348 +351,348 @@ export default function QueryGeneratorPage() {
     }
   };
 
-  const executeQuery = async (messageId: string, sql: string) => {
-    setExecutingQuery(messageId);
-    try {
-      const res = await fetch('/api/sql/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql }),
-      });
-      const data = await res.json();
-
-      if (res.ok) {
-        setQueryResults(prev => ({
-          ...prev,
-          [messageId]: data
-        }));
-      } else {
-        setQueryResults(prev => ({
-          ...prev,
-          [messageId]: { error: data.error }
-        }));
-      }
-    } catch (error) {
-      setQueryResults(prev => ({
-        ...prev,
-        [messageId]: { error: '쿼리 실행 중 오류가 발생했습니다.' }
-      }));
-    } finally {
-      setExecutingQuery(null);
-    }
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submitMessage();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      e.stopPropagation();
-      handleSubmit(e);
+  const handleTextareaKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      void submitMessage();
     }
-  };
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const handleNewChat = () => {
     setCurrentSessionId(null);
     setMessages([]);
-    setQueryResults({});
-  };
+    setInput('');
 
-  const renderQueryResult = (messageId: string) => {
-    const result = queryResults[messageId];
-    if (!result) return null;
-
-    if ('error' in result) {
-      return (
-        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
-          {result.error}
-        </div>
-      );
+    if (!isDesktop) {
+      setSidebarOpen(false);
     }
-
-    return (
-      <div className="mt-3 bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-          <span className="text-xs text-gray-500">
-            결과: {result.totalRows}행 {result.truncated && '(100개만 표시)'}
-          </span>
-          <button
-            onClick={() => {
-              const csv = [
-                result.fields.map(f => f.name).join(','),
-                ...result.rows.map(row => result.fields.map(f => row[f.name]).join(','))
-              ].join('\n');
-              copyToClipboard(csv, `csv-${messageId}`);
-            }}
-            className={`text-xs transition-colors flex items-center gap-1 ${
-              copiedId === `csv-${messageId}` ? 'text-green-500' : 'text-indigo-600 hover:text-indigo-700'
-            }`}
-          >
-            {copiedId === `csv-${messageId}` ? (
-              <>
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                복사됨
-              </>
-            ) : (
-              'CSV 복사'
-            )}
-          </button>
-        </div>
-        <div className="overflow-x-auto max-h-64">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 sticky top-0">
-              <tr>
-                {result.fields.map((field, i) => (
-                  <th key={i} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                    {field.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {result.rows.map((row, i) => (
-                <tr key={i} className="hover:bg-gray-50">
-                  {result.fields.map((field, j) => (
-                    <td key={j} className="px-3 py-2 text-gray-700 whitespace-nowrap">
-                      {row[field.name] === null ? <span className="text-gray-400">NULL</span> : String(row[field.name])}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
   };
+
+  const currentSessionTitle =
+    sessions.find((item) => item.id === currentSessionId)?.title || 'SQL Assistant';
 
   return (
-    <div className="flex h-full relative">
-      {/* 모바일 오버레이 */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+    <div className="relative flex h-full min-h-0 bg-white">
+      {sidebarOpen && !isDesktop && (
+        <button
+          type="button"
+          aria-label="사이드바 닫기"
+          className="fixed inset-0 z-20 bg-black/35"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* 사이드바 */}
-      <div className={`
-        fixed lg:relative inset-y-0 left-0 z-30 lg:z-auto
-        ${sidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0'}
-        transition-all duration-300 bg-gray-900 flex flex-col overflow-hidden
-      `}>
-        <div className="p-3">
-          <button
-            onClick={handleNewChat}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            새 대화
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-2">
-          <div className="text-xs text-gray-500 px-2 py-2">대화 기록</div>
-          {sessions.map((session) => (
-            <div
-              key={session.id}
-              onClick={() => {
-                loadSession(session.id);
-                // 모바일에서 세션 선택 시 사이드바 닫기
-                if (window.innerWidth < 1024) {
-                  setSidebarOpen(false);
-                }
-              }}
-              className={`group flex items-center gap-2 px-3 py-2 text-sm rounded-lg cursor-pointer mb-1 ${
-                currentSessionId === session.id
-                  ? 'bg-gray-700 text-white'
-                  : 'text-gray-300 hover:bg-gray-800'
-              }`}
+      <div
+        className={cn(
+          'fixed inset-y-0 left-0 z-30 flex overflow-hidden transition-all duration-300 ease-out lg:relative lg:z-auto',
+          sidebarOpen ? 'w-[280px] opacity-100' : 'w-0 opacity-0'
+        )}
+      >
+        <aside className="flex h-full w-[280px] flex-col border-r border-[#e5e5e5] bg-[#f9f9f9]">
+          <div className="flex items-center gap-2 p-3">
+            <button
+              type="button"
+              onClick={handleNewChat}
+              className="flex flex-1 items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left text-[14px] tracking-tight text-[#0d0d0d] transition-colors hover:bg-[#ececec]"
             >
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-              </svg>
-              <span className="flex-1 truncate">{session.title || '새 대화'}</span>
-              <button
-                onClick={(e) => deleteSession(session.id, e)}
-                className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-opacity"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#10a37f] text-white">
+                <Plus className="h-3.5 w-3.5" />
+              </div>
+              새 대화
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-[#8e8ea0] transition-colors hover:bg-[#ececec] hover:text-[#0d0d0d]"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-2 pb-3 pt-1">
+            <p className="px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-[#8e8ea0]">
+              최근 대화
+            </p>
+
+            <div className="space-y-1">
+              {sessions.length === 0 ? (
+                <div className="rounded-2xl px-3 py-4 text-sm text-[#8e8ea0]">
+                  아직 저장된 대화가 없습니다.
+                </div>
+              ) : (
+                sessions.map((chatSession) => (
+                  <div
+                    key={chatSession.id}
+                    className={cn(
+                      'group flex items-start gap-2.5 rounded-2xl px-3 py-2.5 transition-colors',
+                      currentSessionId === chatSession.id
+                        ? 'bg-[#ececec]'
+                        : 'hover:bg-[#ececec]/70'
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => loadSession(chatSession.id)}
+                      className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                    >
+                      <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#8e8ea0]" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] tracking-tight text-[#0d0d0d]">
+                          {chatSession.title || '새 대화'}
+                        </div>
+                        <div className="mt-1 text-[11px] text-[#8e8ea0]">
+                          {formatSessionDate(chatSession.updatedAt)}
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => deleteSession(chatSession.id, event)}
+                      className="mt-0.5 rounded-md p-1 text-[#b0b0ba] opacity-0 transition hover:bg-white hover:text-[#0d0d0d] group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
-          ))}
-        </div>
+          </div>
+
+          <div className="border-t border-[#e5e5e5] p-2">
+            <Link
+              href="/settings"
+              className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] tracking-tight text-[#6f6f7b] transition-colors hover:bg-[#ececec] hover:text-[#0d0d0d]"
+            >
+              <Settings className="h-4 w-4" />
+              설정
+            </Link>
+          </div>
+        </aside>
       </div>
 
-      {/* 토글 버튼 - 모바일에서는 항상 보이도록 */}
-      <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className={`
-          fixed lg:absolute top-1/2 -translate-y-1/2 z-10
-          bg-gray-800 text-white p-1.5 rounded-r-md hover:bg-gray-700
-          transition-all duration-300
-          ${sidebarOpen ? 'left-64' : 'left-0'}
-        `}
-      >
-        <svg className={`w-4 h-4 transition-transform ${sidebarOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="border-b border-[#e5e5e5]/80 bg-white/90 px-3 backdrop-blur sm:px-4">
+          <div className="flex h-14 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              {!sidebarOpen && (
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(true)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#8e8ea0] transition-colors hover:bg-[#f7f7f8] hover:text-[#0d0d0d]"
+                >
+                  <PanelLeft className="h-4 w-4" />
+                </button>
+              )}
 
-      {/* 메인 채팅 영역 */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex-1 overflow-y-auto">
+              <button
+                type="button"
+                className="inline-flex min-w-0 items-center gap-2 rounded-xl px-3 py-1.5 transition-colors hover:bg-[#f7f7f8]"
+              >
+                <Sparkles className="h-4 w-4 shrink-0 text-[#10a37f]" />
+                <span className="truncate text-[14px] tracking-tight text-[#0d0d0d]">
+                  {currentSessionTitle}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-[#8e8ea0]" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Link
+                href="/settings"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-[#6f6f7b] transition-colors hover:bg-[#f7f7f8] hover:text-[#0d0d0d]"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">설정</span>
+              </Link>
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-[#6f6f7b] transition-colors hover:bg-[#f7f7f8] hover:text-[#0d0d0d]"
+                >
+                  <Shield className="h-4 w-4" />
+                  <span className="hidden sm:inline">Admin</span>
+                </Link>
+              )}
+              <span className="hidden rounded-full bg-[#f7f7f8] px-3 py-1.5 text-sm text-[#6f6f7b] lg:inline">
+                {session?.user?.email}
+              </span>
+              <button
+                type="button"
+                onClick={() => signOut({ callbackUrl: '/login' })}
+                className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm text-[#6f6f7b] transition-colors hover:bg-[#f7f7f8] hover:text-[#0d0d0d] sm:px-3"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#10a37f] text-xs font-semibold text-white">
+                  {userInitial}
+                </div>
+                <LogOut className="h-4 w-4 sm:hidden" />
+                <span className="hidden sm:inline">로그아웃</span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(16,163,127,0.08),transparent_28%),linear-gradient(180deg,#ffffff_0%,#fcfcfc_100%)]">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-gray-500 px-4">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 mb-4 sm:mb-6 rounded-full bg-indigo-100 flex items-center justify-center">
-                <svg className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                </svg>
+            <div className="mx-auto flex min-h-full max-w-[760px] flex-col items-center justify-center px-4 py-12 text-center sm:py-20">
+              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-[22px] bg-white shadow-[0_20px_40px_rgba(13,13,13,0.08)] ring-1 ring-black/5">
+                <Sparkles className="h-7 w-7 text-[#10a37f]" />
               </div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-gray-700 mb-2 text-center">SQL 쿼리 생성</h2>
-              <p className="text-sm sm:text-base text-gray-400 mb-6 sm:mb-8 text-center">자연어로 질문하면 SQL 쿼리를 생성하고 실행할 수 있습니다</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full max-w-2xl">
-                {[
-                  '지난 30일간 가입한 회원 수',
-                  '가장 많이 팔린 상품 TOP 10',
-                  '이번 달 주문 금액 합계',
-                  '활성 구독자 목록 조회',
-                ].map((example) => (
+              <h2 className="text-3xl font-medium tracking-tight text-[#0d0d0d]">
+                질문을 SQL로 바꿔보세요
+              </h2>
+              <p className="mt-3 max-w-xl text-[15px] leading-7 text-[#6f6f7b]">
+                운영 지표, 매출, 회원 행동처럼 자연어로 요청하면 대화 맥락을 유지한 채 SQL 초안을
+                생성합니다.
+              </p>
+
+              <div className="mt-10 grid w-full gap-3 sm:grid-cols-2">
+                {SUGGESTED_PROMPTS.map((prompt) => (
                   <button
-                    key={example}
-                    onClick={() => setInput(example)}
-                    className="text-left px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 active:bg-indigo-100 transition-colors text-sm text-gray-600"
+                    key={prompt}
+                    type="button"
+                    onClick={() => setInput(prompt)}
+                    className="rounded-[24px] border border-[#e5e5e5] bg-white px-4 py-4 text-left text-[14px] leading-6 tracking-tight text-[#0d0d0d] shadow-[0_14px_28px_rgba(13,13,13,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#d1d1d1] hover:shadow-[0_20px_40px_rgba(13,13,13,0.08)]"
                   >
-                    {example}
+                    {prompt}
                   </button>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto py-4 sm:py-6 px-3 sm:px-4">
+            <div className="mx-auto max-w-[760px] px-4 py-6 sm:py-8">
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`mb-4 sm:mb-6 ${message.role === 'user' ? 'flex justify-end' : ''}`}
+                  className={cn('mb-8', message.role === 'user' ? 'flex justify-end' : '')}
                 >
                   {message.role === 'user' ? (
-                    <div className="max-w-[85%] sm:max-w-[80%] bg-indigo-600 text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl rounded-br-md text-sm sm:text-base">
+                    <div className="max-w-[min(82%,540px)] rounded-[28px] bg-[#f7f7f8] px-4 py-3 text-[15px] leading-7 tracking-tight text-[#0d0d0d] shadow-[inset_0_0_0_1px_rgba(229,229,229,0.8)]">
                       {message.content}
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {message.sql ? (
-                        <div className="bg-gray-900 rounded-xl overflow-hidden">
-                          <div className="flex items-center justify-between px-4 py-2 bg-gray-800">
-                            <span className="text-xs text-gray-400">SQL</span>
-                            <button
-                              onClick={() => copyToClipboard(message.sql!, `sql-${message.id}`)}
-                              className={`text-xs transition-colors flex items-center gap-1 ${
-                                copiedId === `sql-${message.id}` ? 'text-green-400' : 'text-gray-400 hover:text-white'
-                              }`}
-                            >
-                              {copiedId === `sql-${message.id}` ? (
-                                <>
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                  복사됨
-                                </>
-                              ) : (
-                                <>
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                  </svg>
-                                  복사
-                                </>
-                              )}
-                            </button>
-                          </div>
-                          <pre className="p-4 text-sm text-green-400 overflow-x-auto">
-                            <code>{message.sql}</code>
-                          </pre>
-                        </div>
-                      ) : message.parseError && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
-                          <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
-                          <span className="text-sm text-amber-700">SQL을 생성하지 못했습니다. 질문을 다시 시도해주세요.</span>
-                        </div>
-                      )}
-                      <div className="text-gray-700 leading-relaxed prose prose-sm max-w-none prose-table:border-collapse prose-td:border prose-td:border-gray-300 prose-td:px-3 prose-td:py-2 prose-th:border prose-th:border-gray-300 prose-th:px-3 prose-th:py-2 prose-th:bg-gray-100 prose-th:font-semibold prose-table:text-sm prose-code:text-indigo-600 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            pre: CodeBlock,
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
+                    <div className="flex w-full gap-4">
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#10a37f] text-white">
+                        <Sparkles className="h-4 w-4" />
                       </div>
-                      {/* 피드백 버튼 */}
-                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
-                        <QuickFeedback sessionId={currentSessionId || undefined} messageId={message.id} />
-                        <FeedbackButton sessionId={currentSessionId || undefined} messageId={message.id} />
+
+                      <div className="min-w-0 flex-1 space-y-4">
+                        {message.sql ? <SqlCard sql={message.sql} /> : null}
+
+                        {message.parseError ? (
+                          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                            SQL을 생성하지 못했습니다. 질문을 조금 더 구체적으로 다시 시도해주세요.
+                          </div>
+                        ) : null}
+
+                        <div className="prose prose-neutral max-w-none text-[15px] leading-7 text-[#0d0d0d] prose-p:my-0 prose-p:leading-7 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-[#0d0d0d] prose-code:rounded prose-code:bg-[#f7f7f8] prose-code:px-1 prose-code:py-0.5 prose-code:text-[#0d0d0d] prose-code:before:content-none prose-code:after:content-none prose-pre:bg-transparent prose-pre:p-0">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              pre: CodeBlock,
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+
+                        <div className="flex items-center gap-2 border-t border-[#efefef] pt-2">
+                          <QuickFeedback
+                            sessionId={currentSessionId || undefined}
+                            messageId={message.id}
+                          />
+                          <FeedbackButton
+                            sessionId={currentSessionId || undefined}
+                            messageId={message.id}
+                          />
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
               ))}
+
               {loading && (
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                    </div>
-                    <span className="text-sm">쿼리 생성 중...</span>
+                <div className="flex items-center gap-3 pl-11 text-sm text-[#8e8ea0]">
+                  <div className="flex gap-1">
+                    <span
+                      className="h-2 w-2 rounded-full bg-[#10a37f] animate-bounce"
+                      style={{ animationDelay: '0ms' }}
+                    />
+                    <span
+                      className="h-2 w-2 rounded-full bg-[#10a37f] animate-bounce"
+                      style={{ animationDelay: '150ms' }}
+                    />
+                    <span
+                      className="h-2 w-2 rounded-full bg-[#10a37f] animate-bounce"
+                      style={{ animationDelay: '300ms' }}
+                    />
                   </div>
+                  응답을 생성하는 중입니다...
                 </div>
               )}
+
               <div ref={messagesEndRef} />
             </div>
           )}
         </div>
 
-        {/* 입력 영역 */}
-        <div className="border-t bg-white p-2 sm:p-4">
-          <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
-            <div className="relative flex items-end bg-gray-100 rounded-2xl border border-gray-200 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100">
+        <div className="border-t border-[#e5e5e5] bg-white/95 px-4 pb-4 pt-3 backdrop-blur">
+          <form onSubmit={handleSubmit} className="mx-auto max-w-[760px]">
+            <div className="relative rounded-[28px] border border-[#e5e5e5] bg-[#f7f7f8] transition-all duration-200 focus-within:border-[#d1d1d1] focus-within:shadow-[0_0_0_1px_rgba(13,13,13,0.04)]">
               <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="SQL 쿼리가 필요한 내용을 입력하세요..."
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={handleTextareaKeyDown}
+                placeholder="메시지를 입력하세요"
                 rows={1}
-                className="flex-1 bg-transparent px-3 sm:px-4 py-2.5 sm:py-3 resize-none focus:outline-none text-sm sm:text-base text-gray-700 placeholder-gray-400"
                 disabled={loading}
+                className="min-h-[88px] w-full resize-none bg-transparent px-4 pt-4 pb-14 text-[15px] tracking-tight text-[#0d0d0d] outline-none placeholder:text-[#8e8ea0] disabled:cursor-not-allowed"
               />
-              <button
-                type="submit"
-                disabled={!input.trim() || loading}
-                className="m-1.5 sm:m-2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
+
+              <div className="absolute inset-x-2 bottom-2 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-0.5 text-[#8e8ea0]">
+                  <button
+                    type="button"
+                    disabled
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+                  >
+                    <Globe className="h-4 w-4" />
+                  </button>
+                  <span className="hidden text-[11px] tracking-tight sm:block">
+                    Enter 전송 / Shift+Enter 줄바꿈
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!input.trim() || loading}
+                  className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-full text-white transition-all duration-200',
+                    input.trim() && !loading
+                      ? 'bg-[#0d0d0d] hover:bg-[#2d2d2d]'
+                      : 'bg-[#d1d5db] cursor-not-allowed'
+                  )}
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-            <p className="text-xs text-gray-400 text-center mt-1.5 sm:mt-2">
-              Enter로 전송, Shift+Enter로 줄바꿈
+
+            <p className="mt-2 text-center text-[11px] tracking-tight text-[#b0b0ba]">
+              SQL Assistant는 실수할 수 있습니다. 중요한 정보는 반드시 검증하세요.
             </p>
           </form>
         </div>
