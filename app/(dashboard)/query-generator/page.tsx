@@ -370,80 +370,6 @@ function SqlCard({ sql }: { sql: string }) {
   );
 }
 
-function LoadingResponseCard() {
-  return (
-    <div className="overflow-hidden rounded-[24px] border border-[#e5e7eb] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-      <div className="flex items-center justify-between px-5 py-4">
-        <div>
-          <div className="h-4 w-40 animate-pulse rounded bg-[#eef2f7]" />
-          <div className="mt-2 h-3 w-20 animate-pulse rounded bg-[#f3f4f6]" />
-        </div>
-        <div className="inline-flex items-center gap-2 text-sm text-[#4b5563]">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[#4b5563]" />
-          리포트 생성 중
-        </div>
-      </div>
-
-      <div className="grid gap-3 px-5 pb-3 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="rounded-2xl bg-[#f7f7f8] p-3">
-            <div className="h-3 w-14 animate-pulse rounded bg-[#e5e7eb]" />
-            <div className="mt-2 h-6 w-20 animate-pulse rounded bg-[#eef2f7]" />
-          </div>
-        ))}
-      </div>
-
-      <div className="px-5 pb-4">
-        <div className="mb-2 h-4 w-10 animate-pulse rounded bg-[#e5e7eb]" />
-        <div className="space-y-2">
-          <div className="h-3 w-full animate-pulse rounded bg-[#f3f4f6]" />
-          <div className="h-3 w-[92%] animate-pulse rounded bg-[#f3f4f6]" />
-          <div className="h-3 w-[78%] animate-pulse rounded bg-[#f3f4f6]" />
-        </div>
-      </div>
-
-      <div className="px-5 pb-4">
-        <div className="mb-1 h-4 w-8 animate-pulse rounded bg-[#e5e7eb]" />
-        <div className="mb-3 h-3 w-24 animate-pulse rounded bg-[#f3f4f6]" />
-        <div className="h-56 rounded-2xl bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] p-4">
-          <div className="flex h-full items-end gap-3">
-            {[36, 52, 44, 68, 54, 72, 48].map((height, index) => (
-              <div key={index} className="flex flex-1 flex-col justify-end gap-2">
-                <div
-                  className="animate-pulse rounded-t-full bg-[#dbeafe]"
-                  style={{ height: `${height}%` }}
-                />
-                <div className="mx-auto h-2 w-8 animate-pulse rounded bg-[#e5e7eb]" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="px-5 pb-5">
-        <div className="mb-2 flex items-center gap-2">
-          <div className="h-4 w-14 animate-pulse rounded bg-[#e5e7eb]" />
-          <div className="h-3 w-24 animate-pulse rounded bg-[#f3f4f6]" />
-        </div>
-        <div className="overflow-hidden rounded-lg border border-[#e5e7eb]">
-          <div className="grid grid-cols-2 gap-4 border-b border-[#e5e7eb] bg-[#f9fafb] px-4 py-3">
-            <div className="h-3 w-12 animate-pulse rounded bg-[#e5e7eb]" />
-            <div className="h-3 w-12 animate-pulse rounded bg-[#e5e7eb]" />
-          </div>
-          <div className="space-y-3 px-4 py-4">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="grid grid-cols-2 gap-4">
-                <div className="h-3 animate-pulse rounded bg-[#f3f4f6]" />
-                <div className="h-3 animate-pulse rounded bg-[#f3f4f6]" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function QueryGeneratorPage() {
   const { data: session } = useSession();
   const isAdmin = (session?.user as any)?.role === 'admin';
@@ -1162,7 +1088,10 @@ export default function QueryGeneratorPage() {
                     <Sparkles className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <LoadingResponseCard />
+                    <div className="inline-flex max-w-[min(82%,540px)] items-center gap-2 rounded-[28px] bg-white px-4 py-3 text-[15px] leading-7 tracking-tight text-[#6f6f7b] shadow-[0_8px_24px_rgba(15,23,42,0.05),inset_0_0_0_1px_rgba(229,231,235,1)]">
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-[#9ca3af]" />
+                      <span>응답 대기 중...</span>
+                    </div>
                   </div>
                 </div>
               )}

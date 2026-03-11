@@ -365,70 +365,30 @@ print_step 6 "완료! 실행 방법"
 echo ""
 echo -e "  ${GREEN}${BOLD}셋업이 완료되었습니다!${NC}"
 echo ""
-echo -e "  ${BOLD}실행 방법 (터미널 2개 필요):${NC}"
+echo -e "  ${BOLD}실행 방법:${NC}"
 echo ""
-echo -e "  ${CYAN}터미널 1 — OpenClaw Gateway:${NC}"
-echo -e "  $ ${BOLD}$OPENCLAW_CMD gateway${NC}"
-echo ""
-echo -e "  ${CYAN}터미널 2 — Zoopibot:${NC}"
+echo -e "  ${CYAN}Zoopibot + Gateway 자동 실행:${NC}"
 echo -e "  $ ${BOLD}cd $PROJECT_DIR && yarn dev${NC}"
 echo ""
 echo -e "  ${CYAN}테스트:${NC}"
 echo -e "  $ ${BOLD}curl -s http://localhost:3000/api/v2/health | jq .${NC}"
 echo ""
-echo -e "  ${BOLD}빠른 실행 (백그라운드):${NC}"
+echo -e "  ${BOLD}빠른 실행 스크립트:${NC}"
 echo -e "  $ ${BOLD}$PROJECT_DIR/scripts/start.sh${NC}"
+echo ""
+echo -e "  ${CYAN}Gateway를 따로 관리하려면:${NC}"
+echo -e "  $ ${BOLD}OPENCLAW_AUTOSTART=0 yarn dev${NC}"
 echo ""
 
 # start.sh 생성
 cat > "$PROJECT_DIR/scripts/start.sh" << 'STARTEOF'
 #!/bin/bash
-set -e
+set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-OPENCLAW_CMD="${OPENCLAW_CMD:-$PROJECT_DIR/scripts/openclaw-cli.sh}"
 cd "$PROJECT_DIR"
 
-EXISTING_GATEWAY="$(lsof -nP -iTCP:18789 -sTCP:LISTEN 2>/dev/null | tail -n +2 || true)"
-if [ -n "$EXISTING_GATEWAY" ]; then
-  echo "포트 18789가 이미 사용 중입니다."
-  echo "$EXISTING_GATEWAY"
-  if echo "$EXISTING_GATEWAY" | grep -q "clawdbot-gateway"; then
-    echo ""
-    echo "이전 clawdbot LaunchAgent가 실행 중입니다. 아래 명령으로 중지하세요:"
-    echo "  launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.clawdbot.gateway.plist"
-  else
-    echo ""
-    echo "기존 Gateway를 중지하거나 OPENCLAW_URL/포트를 조정한 뒤 다시 실행하세요."
-  fi
-  exit 1
-fi
-
-echo "OpenClaw Gateway 시작 중..."
-"$OPENCLAW_CMD" gateway &
-GW_PID=$!
-
-echo "Zoopibot 시작 중..."
-yarn dev &
-ZB_PID=$!
-
-echo ""
-echo "실행 중:"
-echo "  OpenClaw Gateway (PID: $GW_PID) → http://127.0.0.1:18789"
-echo "  Zoopibot          (PID: $ZB_PID) → http://localhost:3000"
-echo ""
-echo "종료하려면 Ctrl+C"
-
-cleanup() {
-  echo ""
-  echo "서비스 종료 중..."
-  kill $GW_PID $ZB_PID 2>/dev/null
-  wait $GW_PID $ZB_PID 2>/dev/null
-  echo "완료"
-}
-
-trap cleanup SIGINT SIGTERM
-wait
+exec node ./scripts/run-with-openclaw.mjs yarn dev:app
 STARTEOF
 
 chmod +x "$PROJECT_DIR/scripts/start.sh"

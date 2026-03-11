@@ -58,6 +58,14 @@ npx prisma migrate dev
 yarn dev
 ```
 
+`yarn dev`는 OpenClaw Gateway도 함께 실행하고, 종료 시 같이 정리합니다.
+`yarn build` 후 `yarn start`도 동일하게 Gateway를 함께 관리합니다.
+이미 Gateway를 별도로 띄워둔 경우에는 아래처럼 자동 실행만 끌 수 있습니다.
+
+```bash
+OPENCLAW_AUTOSTART=0 yarn dev
+```
+
 브라우저에서 http://localhost:3000 접속
 
 ### OpenClaw + Codex API 사용
@@ -78,7 +86,6 @@ OpenClaw Gateway를 API처럼 두고, 실제 모델은 Codex API로 붙이려면
 실행:
 
 ```bash
-./scripts/openclaw-cli.sh gateway
 yarn dev
 ```
 
@@ -159,10 +166,9 @@ ZOOPIBOT_SERVICE_TOKEN=...
 NEXTAUTH_URL=https://zoopibot.example.com
 ```
 
-4. Gateway 실행
+4. 앱 실행
 
 ```bash
-./scripts/openclaw-cli.sh gateway
 yarn dev
 ```
 
@@ -193,7 +199,6 @@ API 키/Provider만 따로 바꾸려면:
 그 다음:
 
 ```bash
-./scripts/openclaw-cli.sh gateway
 yarn dev
 ```
 

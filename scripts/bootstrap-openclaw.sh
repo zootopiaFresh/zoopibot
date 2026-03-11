@@ -206,5 +206,5 @@ if [ -n "$AUTH_HINT" ]; then
 fi
 
 log "다음 단계:"
-log "  1) $OPENCLAW_CMD gateway"
-log "  2) yarn dev"
+log "  1) yarn dev"
+log "  2) 운영 빌드 실행 시 yarn start"

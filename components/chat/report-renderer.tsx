@@ -21,6 +21,9 @@ import {
   YAxis,
 } from 'recharts';
 
+const markdownBodyClassName =
+  'prose prose-neutral max-w-none text-sm leading-7 text-[#4b5563] prose-p:my-0 prose-p:leading-7 prose-headings:my-0 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-[#111827] prose-code:rounded prose-code:bg-[#f3f4f6] prose-code:px-1 prose-code:py-0.5 prose-code:text-[#111827] prose-code:before:content-none prose-code:after:content-none';
+
 function formatValue(value: unknown, format?: FieldFormat) {
   if (value === null || value === undefined) return 'NULL';
 
@@ -91,13 +94,6 @@ function resolveChartConfig(spec: Record<string, any>) {
     xTitle,
     yTitle,
   };
-}
-
-function splitNarrativeParagraphs(body: string) {
-  return body
-    .split(/\n\s*\n|\n(?=[-•])/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
 }
 
 function buildAutoMetrics(snapshot: QueryResultSnapshot) {
@@ -318,18 +314,16 @@ export function ReportRenderer({
                   {block.title && block.title !== '요약' ? (
                     <p className="mb-2 text-sm font-medium text-[#111827]">{block.title}</p>
                   ) : null}
-                  <div className="space-y-3">
-                    {splitNarrativeParagraphs(block.body).map((paragraph, paragraphIndex) => (
-                      <p key={paragraphIndex} className="whitespace-pre-wrap">
-                        {paragraph}
-                      </p>
-                    ))}
+                  <div className={markdownBodyClassName}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {block.body}
+                    </ReactMarkdown>
                   </div>
                 </div>
               ))}
 
               {narrativeBlocks.length === 0 && bodyMarkdown ? (
-                <div className="prose prose-neutral max-w-none text-sm leading-7 text-[#4b5563] prose-p:my-0 prose-p:leading-7 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-[#111827] prose-code:rounded prose-code:bg-[#f3f4f6] prose-code:px-1 prose-code:py-0.5 prose-code:text-[#111827] prose-code:before:content-none prose-code:after:content-none">
+                <div className={markdownBodyClassName}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {bodyMarkdown}
                   </ReactMarkdown>
@@ -421,8 +415,12 @@ export function ReportRenderer({
               <ul className="list-disc space-y-1.5 pl-5 text-sm text-[#6b7280]">
                 {noteBlocks.map((block, index) => (
                   <li key={`${block.title ?? 'note'}-${index}`}>
-                    {block.title ? <span className="font-medium text-[#111827]">{block.title}: </span> : null}
-                    {block.body}
+                    {block.title ? <span className="font-medium text-[#111827]">{block.title}</span> : null}
+                    <div className={block.title ? `mt-1 ${markdownBodyClassName}` : markdownBodyClassName}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {block.body}
+                      </ReactMarkdown>
+                    </div>
                   </li>
                 ))}
               </ul>
