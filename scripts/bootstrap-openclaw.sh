@@ -2,6 +2,7 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+OPENCLAW_CMD="${OPENCLAW_CMD:-$PROJECT_DIR/scripts/openclaw-cli.sh}"
 ENV_FILE="${ENV_FILE:-$PROJECT_DIR/.env}"
 OPENCLAW_DIR="${OPENCLAW_DIR:-$HOME/.openclaw}"
 WORKSPACE_DIR="$OPENCLAW_DIR/workspace"
@@ -15,6 +16,39 @@ log() {
 fail() {
   echo "[bootstrap-openclaw] ERROR: $1" >&2
   exit 1
+}
+
+generate_secret() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+  elif command -v node >/dev/null 2>&1; then
+    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  else
+    date +%s | sha256sum | cut -d' ' -f1
+  fi
+}
+
+upsert_env() {
+  local key="$1"
+  local value="$2"
+  local tmp
+  tmp="$(mktemp)"
+  touch "$ENV_FILE"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { done = 0 }
+    index($0, key "=") == 1 {
+      print key "=\"" value "\""
+      done = 1
+      next
+    }
+    { print }
+    END {
+      if (!done) {
+        print key "=\"" value "\""
+      }
+    }
+  ' "$ENV_FILE" > "$tmp"
+  mv "$tmp" "$ENV_FILE"
 }
 
 require_var() {
@@ -44,17 +78,30 @@ if [ "$AI_BACKEND" != "openclaw" ]; then
   fail "이 스크립트는 AI_BACKEND=openclaw 환경에서만 사용합니다."
 fi
 
-if ! command -v openclaw >/dev/null 2>&1; then
-  if [ "$INSTALL_OPENCLAW" = "1" ]; then
-    log "openclaw가 없어 전역 설치를 시도합니다."
-    npm install -g openclaw
-  else
-    fail "openclaw 명령이 없습니다. INSTALL_OPENCLAW=1 또는 수동 설치가 필요합니다."
-  fi
+if [ ! -x "$OPENCLAW_CMD" ]; then
+  fail "OpenClaw 실행 래퍼가 없습니다: $OPENCLAW_CMD"
 fi
 
-require_var OPENCLAW_GATEWAY_TOKEN
-require_var ZOOPIBOT_SERVICE_TOKEN
+if [ "${INSTALL_OPENCLAW}" = "1" ]; then
+  log "로컬 openclaw 실행 파일을 확인합니다."
+  "$OPENCLAW_CMD" --version >/dev/null
+fi
+
+if [ -z "$OPENCLAW_GATEWAY_TOKEN" ]; then
+  OPENCLAW_GATEWAY_TOKEN="$(generate_secret)"
+  upsert_env OPENCLAW_GATEWAY_TOKEN "$OPENCLAW_GATEWAY_TOKEN"
+  log "OPENCLAW_GATEWAY_TOKEN이 없어 새 값을 생성해 .env에 저장했습니다."
+fi
+
+if [ -z "$ZOOPIBOT_SERVICE_TOKEN" ]; then
+  ZOOPIBOT_SERVICE_TOKEN="$(generate_secret)"
+  upsert_env ZOOPIBOT_SERVICE_TOKEN "$ZOOPIBOT_SERVICE_TOKEN"
+  log "ZOOPIBOT_SERVICE_TOKEN이 없어 새 값을 생성해 .env에 저장했습니다."
+fi
+
+upsert_env AI_BACKEND "$AI_BACKEND"
+upsert_env OPENCLAW_URL "$OPENCLAW_URL"
+upsert_env OPENCLAW_PROVIDER_MODE "$OPENCLAW_PROVIDER_MODE"
 
 case "$OPENCLAW_PROVIDER_MODE" in
   openai-api-key)
@@ -62,6 +109,7 @@ case "$OPENCLAW_PROVIDER_MODE" in
     if [ -z "$OPENCLAW_PRIMARY_MODEL" ]; then
       OPENCLAW_PRIMARY_MODEL="openai/gpt-5.4"
     fi
+    upsert_env OPENCLAW_PRIMARY_MODEL "$OPENCLAW_PRIMARY_MODEL"
     ENV_BLOCK=$(cat <<EOF
   "env": {
     "OPENAI_API_KEY": "${OPENAI_API_KEY}"
@@ -75,14 +123,16 @@ EOF
     if [ -z "$OPENCLAW_PRIMARY_MODEL" ]; then
       OPENCLAW_PRIMARY_MODEL="openai-codex/gpt-5.4"
     fi
+    upsert_env OPENCLAW_PRIMARY_MODEL "$OPENCLAW_PRIMARY_MODEL"
     ENV_BLOCK=""
-    AUTH_HINT="openclaw models auth login --provider openai-codex"
+    AUTH_HINT="$OPENCLAW_CMD models auth login --provider openai-codex"
     ;;
   anthropic-api-key)
     require_var ANTHROPIC_API_KEY
     if [ -z "$OPENCLAW_PRIMARY_MODEL" ]; then
       fail "anthropic-api-key 모드에서는 OPENCLAW_PRIMARY_MODEL도 지정해주세요. 예: anthropic/claude-opus-4-1"
     fi
+    upsert_env OPENCLAW_PRIMARY_MODEL "$OPENCLAW_PRIMARY_MODEL"
     ENV_BLOCK=$(cat <<EOF
   "env": {
     "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
@@ -109,7 +159,8 @@ cat > "$CONFIG_FILE" <<EOF
 {
   "\$schema": "https://openclaw.ai/schema/openclaw.json",
 
-${ENV_BLOCK}  "agents": {
+${ENV_BLOCK}
+  "agents": {
     "defaults": {
       "workspace": "${OPENCLAW_AGENT_WORKSPACE}",
       "model": {
@@ -155,5 +206,5 @@ if [ -n "$AUTH_HINT" ]; then
 fi
 
 log "다음 단계:"
-log "  1) openclaw gateway"
+log "  1) $OPENCLAW_CMD gateway"
 log "  2) yarn dev"

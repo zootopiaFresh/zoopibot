@@ -2,6 +2,7 @@
 set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+OPENCLAW_CMD="${OPENCLAW_CMD:-$PROJECT_DIR/scripts/openclaw-cli.sh}"
 cd "$PROJECT_DIR"
 
 EXISTING_GATEWAY="$(lsof -nP -iTCP:18789 -sTCP:LISTEN 2>/dev/null | tail -n +2 || true)"
@@ -20,7 +21,7 @@ if [ -n "$EXISTING_GATEWAY" ]; then
 fi
 
 echo "OpenClaw Gateway 시작 중..."
-openclaw gateway &
+"$OPENCLAW_CMD" gateway &
 GW_PID=$!
 
 echo "Zoopibot 시작 중..."

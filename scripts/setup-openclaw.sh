@@ -11,6 +11,7 @@ NC='\033[0m' # No Color
 BOLD='\033[1m'
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+OPENCLAW_CMD="${OPENCLAW_CMD:-$PROJECT_DIR/scripts/openclaw-cli.sh}"
 
 print_header() {
   echo ""
@@ -124,18 +125,12 @@ fi
 # Step 2: OpenClaw 설치
 print_step 2 "OpenClaw 설치"
 
-if command -v openclaw &> /dev/null; then
-  OPENCLAW_VER=$(openclaw --version 2>/dev/null || echo "unknown")
-  print_skip "OpenClaw 이미 설치됨 ($OPENCLAW_VER)"
+if [ -x "$OPENCLAW_CMD" ]; then
+  OPENCLAW_VER=$("$OPENCLAW_CMD" --version 2>/dev/null || echo "unknown")
+  print_skip "OpenClaw 실행 래퍼 준비됨 ($OPENCLAW_VER)"
 else
-  echo -e "  OpenClaw을 전역 설치합니다..."
-  npm install -g openclaw 2>&1 | tail -3
-  if command -v openclaw &> /dev/null; then
-    print_ok "OpenClaw 설치 완료"
-  else
-    print_fail "OpenClaw 설치 실패"
-    echo -e "  ${YELLOW}수동으로 설치하세요: npm install -g openclaw${NC}"
-  fi
+  print_fail "OpenClaw 실행 래퍼가 없습니다: $OPENCLAW_CMD"
+  exit 1
 fi
 
 # ─────────────────────────────────────────────
@@ -360,7 +355,7 @@ OCEOF
 print_ok "openclaw.json 생성 완료 → $OPENCLAW_DIR/openclaw.json"
 
 if [ "$PROVIDER_MODE" = "openai-codex" ]; then
-  echo -e "  ${YELLOW}추가 인증 필요:${NC} openclaw models auth login --provider openai-codex"
+  echo -e "  ${YELLOW}추가 인증 필요:${NC} $OPENCLAW_CMD models auth login --provider openai-codex"
 fi
 
 # ─────────────────────────────────────────────
@@ -373,7 +368,7 @@ echo ""
 echo -e "  ${BOLD}실행 방법 (터미널 2개 필요):${NC}"
 echo ""
 echo -e "  ${CYAN}터미널 1 — OpenClaw Gateway:${NC}"
-echo -e "  $ ${BOLD}openclaw gateway${NC}"
+echo -e "  $ ${BOLD}$OPENCLAW_CMD gateway${NC}"
 echo ""
 echo -e "  ${CYAN}터미널 2 — Zoopibot:${NC}"
 echo -e "  $ ${BOLD}cd $PROJECT_DIR && yarn dev${NC}"
@@ -391,6 +386,7 @@ cat > "$PROJECT_DIR/scripts/start.sh" << 'STARTEOF'
 set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+OPENCLAW_CMD="${OPENCLAW_CMD:-$PROJECT_DIR/scripts/openclaw-cli.sh}"
 cd "$PROJECT_DIR"
 
 EXISTING_GATEWAY="$(lsof -nP -iTCP:18789 -sTCP:LISTEN 2>/dev/null | tail -n +2 || true)"
@@ -409,7 +405,7 @@ if [ -n "$EXISTING_GATEWAY" ]; then
 fi
 
 echo "OpenClaw Gateway 시작 중..."
-openclaw gateway &
+"$OPENCLAW_CMD" gateway &
 GW_PID=$!
 
 echo "Zoopibot 시작 중..."

@@ -78,7 +78,7 @@ OpenClaw Gateway를 API처럼 두고, 실제 모델은 Codex API로 붙이려면
 실행:
 
 ```bash
-openclaw gateway
+./scripts/openclaw-cli.sh gateway
 yarn dev
 ```
 
@@ -102,7 +102,7 @@ yarn dev
   - 필요: `OPENAI_API_KEY`
   - 기본 모델: `openai/gpt-5.4`
 - `OPENCLAW_PROVIDER_MODE=openai-codex`
-  - 필요: 서버에서 1회 `openclaw models auth login --provider openai-codex`
+  - 필요: 서버에서 1회 `./scripts/openclaw-cli.sh models auth login --provider openai-codex`
   - 기본 모델: `openai-codex/gpt-5.4`
 - `OPENCLAW_PROVIDER_MODE=anthropic-api-key`
   - 필요: `ANTHROPIC_API_KEY`, `OPENCLAW_PRIMARY_MODEL`
@@ -121,7 +121,7 @@ NEXTAUTH_URL=https://zoopibot.example.com
 그 다음:
 
 ```bash
-openclaw gateway
+./scripts/openclaw-cli.sh gateway
 yarn dev
 ```
 
