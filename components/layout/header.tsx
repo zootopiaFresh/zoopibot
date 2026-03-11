@@ -14,7 +14,7 @@ export function Header() {
       <div className="px-4 sm:px-6">
         <div className="flex h-14 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#10a37f] text-white">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#343541] text-white">
               <Sparkles className="h-4 w-4" />
             </div>
             <div className="min-w-0">
@@ -53,7 +53,7 @@ export function Header() {
               className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm text-[#6f6f7b] transition-colors hover:bg-[#f7f7f8] hover:text-[#0d0d0d] sm:px-3"
               title="로그아웃"
             >
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#10a37f] text-xs font-semibold text-white">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#343541] text-xs font-semibold text-white">
                 {userInitial}
               </div>
               <LogOut className="h-4 w-4 sm:hidden" />

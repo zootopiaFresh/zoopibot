@@ -1,7 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import type { QueryResultSnapshot, ReportPresentation, ReportBlock, FieldFormat } from '@/lib/presentation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import type {
+  FieldFormat,
+  QueryResultSnapshot,
+  ReportPresentation,
+} from '@/lib/presentation';
 import {
   Bar,
   BarChart,
@@ -86,7 +93,48 @@ function resolveChartConfig(spec: Record<string, any>) {
   };
 }
 
-function VegaLiteChart({
+function splitNarrativeParagraphs(body: string) {
+  return body
+    .split(/\n\s*\n|\n(?=[-•])/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+}
+
+function buildAutoMetrics(snapshot: QueryResultSnapshot) {
+  const numericFields = snapshot.fields.filter((field) =>
+    snapshot.rows.every((row) => {
+      const value = row[field.name];
+      return value === null || value === undefined || typeof value === 'number';
+    })
+  );
+
+  if (numericFields.length !== 1 || snapshot.rows.length < 2) {
+    return [];
+  }
+
+  const valueField = numericFields[0].name;
+  const values = snapshot.rows
+    .map((row) => row[valueField])
+    .filter((value): value is number => typeof value === 'number');
+
+  if (values.length === 0) {
+    return [];
+  }
+
+  const total = values.reduce((sum, value) => sum + value, 0);
+  const average = total / values.length;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+
+  return [
+    { label: '합계', value: total, format: 'number' as const, tone: 'default' as const },
+    { label: '평균', value: average, format: 'number' as const, tone: 'default' as const },
+    { label: '최고', value: max, format: 'number' as const, tone: 'success' as const },
+    { label: '최저', value: min, format: 'number' as const, tone: 'warning' as const },
+  ];
+}
+
+function ChartBlock({
   spec,
   snapshot,
 }: {
@@ -97,7 +145,7 @@ function VegaLiteChart({
 
   if (!config) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-sm text-gray-500">
+      <div className="rounded-xl border border-dashed border-[#d1d5db] bg-[#f9fafb] px-4 py-10 text-sm text-[#6b7280]">
         차트 설정을 해석하지 못해 표로 확인해주세요.
       </div>
     );
@@ -111,23 +159,52 @@ function VegaLiteChart({
   const isBar = mark === 'bar';
 
   return (
-    <div className="h-80 w-full min-w-[320px]">
+    <div className="h-56 w-full min-w-[320px]">
       <ResponsiveContainer width="100%" height="100%">
         {isBar ? (
-          <BarChart data={rows} margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
+          <BarChart data={rows} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey={xField} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} label={{ value: xTitle, position: 'insideBottom', offset: -4 }} />
-            <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} label={{ value: yTitle, angle: -90, position: 'insideLeft' }} />
+            <XAxis
+              dataKey={xField}
+              tick={{ fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              label={{ value: xTitle, position: 'insideBottom', offset: -4 }}
+            />
+            <YAxis
+              tick={{ fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              label={{ value: yTitle, angle: -90, position: 'insideLeft' }}
+            />
             <Tooltip formatter={(value) => formatValue(value)} />
-            <Bar dataKey={yField} fill="#4f46e5" radius={[6, 6, 0, 0]} />
+            <Bar dataKey={yField} fill="#3b82f6" radius={[6, 6, 0, 0]} />
           </BarChart>
         ) : (
-          <LineChart data={rows} margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
+          <LineChart data={rows} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey={xField} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} label={{ value: xTitle, position: 'insideBottom', offset: -4 }} />
-            <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} label={{ value: yTitle, angle: -90, position: 'insideLeft' }} />
+            <XAxis
+              dataKey={xField}
+              tick={{ fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              label={{ value: xTitle, position: 'insideBottom', offset: -4 }}
+            />
+            <YAxis
+              tick={{ fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              label={{ value: yTitle, angle: -90, position: 'insideLeft' }}
+            />
             <Tooltip formatter={(value) => formatValue(value)} />
-            <Line type="monotone" dataKey={yField} stroke="#4f46e5" strokeWidth={3} dot={{ r: 4, fill: '#4f46e5' }} activeDot={{ r: 6 }} />
+            <Line
+              type="monotone"
+              dataKey={yField}
+              stroke="#3b82f6"
+              strokeWidth={2}
+              dot={{ r: 4, fill: '#3b82f6' }}
+              activeDot={{ r: 6 }}
+            />
           </LineChart>
         )}
       </ResponsiveContainer>
@@ -135,18 +212,25 @@ function VegaLiteChart({
   );
 }
 
-function blockKey(block: ReportBlock, index: number) {
-  return `${block.type}-${block.title ?? 'untitled'}-${index}`;
-}
-
 export function ReportRenderer({
   presentation,
   snapshot,
+  bodyMarkdown,
 }: {
   presentation: ReportPresentation;
   snapshot: QueryResultSnapshot;
+  bodyMarkdown?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const [showTable, setShowTable] = useState(true);
+  const [showNotes, setShowNotes] = useState(true);
+
+  const metricBlocks = presentation.blocks.filter((block) => block.type === 'metric-row');
+  const narrativeBlocks = presentation.blocks.filter((block) => block.type === 'narrative');
+  const chartBlocks = presentation.blocks.filter((block) => block.type === 'vega-lite');
+  const tableBlocks = presentation.blocks.filter((block) => block.type === 'table');
+  const noteBlocks = presentation.blocks.filter((block) => block.type === 'callout');
+  const autoMetrics = metricBlocks.length === 0 ? buildAutoMetrics(snapshot) : [];
 
   const handleCopyCsv = async () => {
     await navigator.clipboard.writeText(buildCsv(snapshot));
@@ -155,120 +239,197 @@ export function ReportRenderer({
   };
 
   return (
-    <div className="mt-3 space-y-4">
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="flex items-start justify-between gap-4">
+    <div className="mt-3 max-w-3xl">
+      <div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white">
+        <div className="flex items-center justify-between px-5 py-4">
           <div>
-            <h3 className="text-base font-semibold text-gray-900">{presentation.title}</h3>
-            <p className="mt-1 text-xs text-gray-500">
-              결과 {snapshot.totalRows.toLocaleString('ko-KR')}행{snapshot.truncated ? ' · 상위 100행 저장' : ''}
-            </p>
+            <h3 className="text-base font-medium text-[#111827]">{presentation.title}</h3>
+            <p className="text-sm text-[#6b7280]">결과 {snapshot.totalRows.toLocaleString('ko-KR')}행</p>
           </div>
+
           <button
+            type="button"
             onClick={handleCopyCsv}
-            className={`text-xs transition-colors ${
-              copied ? 'text-green-600' : 'text-indigo-600 hover:text-indigo-700'
-            }`}
+            className="text-sm text-[#4b5563] transition-colors hover:text-[#111827]"
           >
-            {copied ? 'CSV 복사됨' : 'CSV 복사'}
+            {copied ? '복사됨!' : 'CSV 복사'}
           </button>
         </div>
-      </div>
 
-      {presentation.blocks.map((block, index) => {
-        if (block.type === 'narrative') {
-          return (
-            <section key={blockKey(block, index)} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-              {block.title && <h4 className="text-sm font-semibold text-gray-900">{block.title}</h4>}
-              <p className={`text-sm leading-6 text-gray-700 ${block.title ? 'mt-2' : ''}`}>{block.body}</p>
-            </section>
-          );
-        }
+        {metricBlocks.length > 0 ? (
+          <div className="grid gap-3 px-5 pb-3 sm:grid-cols-2 xl:grid-cols-4">
+            {metricBlocks.flatMap((block) => block.items).slice(0, 4).map((item) => {
+              const value = snapshot.rows[0]?.[item.field];
 
-        if (block.type === 'callout') {
-          const tones = {
-            info: 'border-sky-200 bg-sky-50 text-sky-900',
-            success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-            warning: 'border-amber-200 bg-amber-50 text-amber-900',
-          };
-
-          return (
-            <section key={blockKey(block, index)} className={`rounded-2xl border p-4 ${tones[block.tone]}`}>
-              {block.title && <h4 className="text-sm font-semibold">{block.title}</h4>}
-              <p className={`text-sm leading-6 ${block.title ? 'mt-1' : ''}`}>{block.body}</p>
-            </section>
-          );
-        }
-
-        if (block.type === 'metric-row') {
-          return (
-            <section key={blockKey(block, index)} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-              {block.title && <h4 className="text-sm font-semibold text-gray-900">{block.title}</h4>}
-              {block.description && <p className="mt-1 text-sm text-gray-500">{block.description}</p>}
-              <div className={`grid gap-3 ${block.items.length >= 4 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-2'}`}>
-                {block.items.map((item) => {
-                  const value = snapshot.rows[0]?.[item.field];
-                  return (
-                    <div key={item.field} className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-indigo-500">{item.label}</div>
-                      <div className="mt-2 text-2xl font-semibold text-gray-900">
-                        {item.prefix ?? ''}
-                        {formatValue(value, item.format)}
-                        {item.suffix ?? ''}
-                      </div>
-                    </div>
-                  );
-                })}
+              return (
+                <div key={item.field} className="rounded-lg bg-[#f9fafb] p-3 text-center">
+                  <p className="text-xs text-[#6b7280]">{item.label}</p>
+                  <p className="mt-0.5 text-lg font-semibold text-[#111827]">
+                    {item.prefix ?? ''}
+                    {formatValue(value, item.format)}
+                    {item.suffix ?? ''}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        ) : autoMetrics.length > 0 ? (
+          <div className="grid gap-3 px-5 pb-3 sm:grid-cols-2 xl:grid-cols-4">
+            {autoMetrics.map((item) => (
+              <div
+                key={item.label}
+                className={`rounded-lg p-3 text-center ${
+                  item.tone === 'success'
+                    ? 'bg-emerald-50'
+                    : item.tone === 'warning'
+                      ? 'bg-orange-50'
+                      : 'bg-[#f9fafb]'
+                }`}
+              >
+                <p className={`text-xs ${
+                  item.tone === 'success'
+                    ? 'text-emerald-600'
+                    : item.tone === 'warning'
+                      ? 'text-orange-600'
+                      : 'text-[#6b7280]'
+                }`}>
+                  {item.label}
+                </p>
+                <p className={`mt-0.5 text-lg font-semibold ${
+                  item.tone === 'success'
+                    ? 'text-emerald-700'
+                    : item.tone === 'warning'
+                      ? 'text-orange-700'
+                      : 'text-[#111827]'
+                }`}>
+                  {formatValue(item.value, item.format)}
+                </p>
               </div>
-            </section>
-          );
-        }
+            ))}
+          </div>
+        ) : null}
 
-        if (block.type === 'vega-lite') {
-          return (
-            <section key={blockKey(block, index)} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-              {block.title && <h4 className="text-sm font-semibold text-gray-900">{block.title}</h4>}
-              {block.description && <p className="mt-1 text-sm text-gray-500">{block.description}</p>}
-              <div className="mt-4 overflow-x-auto">
-                <VegaLiteChart spec={block.spec} snapshot={snapshot} />
-              </div>
-            </section>
-          );
-        }
-
-        return (
-          <section key={blockKey(block, index)} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 px-4 py-3">
-              {block.title && <h4 className="text-sm font-semibold text-gray-900">{block.title}</h4>}
-              {block.description && <p className="mt-1 text-sm text-gray-500">{block.description}</p>}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {block.columns.map((column) => (
-                      <th key={column.key} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-                        {column.label}
-                      </th>
+        {(narrativeBlocks.length > 0 || bodyMarkdown) ? (
+          <div className="px-5 pb-4">
+            <h4 className="mb-2 text-sm font-medium text-[#111827]">요약</h4>
+            <div className="space-y-4 text-sm leading-7 text-[#4b5563]">
+              {narrativeBlocks.map((block, index) => (
+                <div key={`${block.title ?? 'narrative'}-${index}`}>
+                  {block.title && block.title !== '요약' ? (
+                    <p className="mb-2 text-sm font-medium text-[#111827]">{block.title}</p>
+                  ) : null}
+                  <div className="space-y-3">
+                    {splitNarrativeParagraphs(block.body).map((paragraph, paragraphIndex) => (
+                      <p key={paragraphIndex} className="whitespace-pre-wrap">
+                        {paragraph}
+                      </p>
                     ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {snapshot.rows.slice(0, block.maxRows ?? 20).map((row, rowIndex) => (
-                    <tr key={`${rowIndex}-${block.columns[0]?.key ?? 'row'}`} className="hover:bg-gray-50">
+                  </div>
+                </div>
+              ))}
+
+              {narrativeBlocks.length === 0 && bodyMarkdown ? (
+                <div className="prose prose-neutral max-w-none text-sm leading-7 text-[#4b5563] prose-p:my-0 prose-p:leading-7 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-[#111827] prose-code:rounded prose-code:bg-[#f3f4f6] prose-code:px-1 prose-code:py-0.5 prose-code:text-[#111827] prose-code:before:content-none prose-code:after:content-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {bodyMarkdown}
+                  </ReactMarkdown>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {chartBlocks.map((block, index) => (
+          <div key={`${block.title ?? 'chart'}-${index}`} className="px-5 pb-4">
+            <h4 className="mb-1 text-sm font-medium text-[#111827]">{block.title || '추이'}</h4>
+            <p className="mb-3 text-xs text-[#6b7280]">
+              {block.description || '기간 기준 값'}
+            </p>
+            <ChartBlock spec={block.spec} snapshot={snapshot} />
+          </div>
+        ))}
+
+        {tableBlocks.map((block, index) => (
+          <div key={`${block.title ?? 'table'}-${index}`} className="px-5 pb-4">
+            <button
+              type="button"
+              onClick={() => setShowTable((prev) => !prev)}
+              className="mb-2 flex items-center gap-1.5"
+            >
+              <h4 className="text-sm font-medium text-[#111827]">{block.title || '조회 결과'}</h4>
+              <span className="text-xs text-[#6b7280]">
+                {block.description || `${snapshot.totalRows.toLocaleString('ko-KR')}행 결과입니다.`}
+              </span>
+              {showTable ? (
+                <ChevronUp className="h-3.5 w-3.5 text-[#6b7280]" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5 text-[#6b7280]" />
+              )}
+            </button>
+
+            {showTable ? (
+              <div className="overflow-x-auto rounded-lg border border-[#e5e7eb]">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#e5e7eb] bg-[#f9fafb]">
                       {block.columns.map((column) => (
-                        <td key={column.key} className="whitespace-nowrap px-4 py-3 text-gray-700">
-                          {formatValue(row[column.key], column.format)}
-                        </td>
+                        <th
+                          key={column.key}
+                          className="px-4 py-2.5 text-left text-xs text-[#6b7280]"
+                        >
+                          {column.label}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        );
-      })}
+                  </thead>
+                  <tbody>
+                    {snapshot.rows.slice(0, block.maxRows ?? 20).map((row, rowIndex) => (
+                      <tr
+                        key={`${rowIndex}-${block.columns[0]?.key ?? 'row'}`}
+                        className="border-b border-[#eef2f7] last:border-0"
+                      >
+                        {block.columns.map((column) => (
+                          <td key={column.key} className="whitespace-nowrap px-4 py-2.5 text-[#111827]">
+                            {formatValue(row[column.key], column.format)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </div>
+        ))}
+
+        {noteBlocks.length > 0 ? (
+          <div className="px-5 pb-4">
+            <button
+              type="button"
+              onClick={() => setShowNotes((prev) => !prev)}
+              className="mb-2 flex items-center gap-1.5"
+            >
+              <h4 className="text-sm font-medium text-[#111827]">주의사항</h4>
+              {showNotes ? (
+                <ChevronUp className="h-3.5 w-3.5 text-[#6b7280]" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5 text-[#6b7280]" />
+              )}
+            </button>
+
+            {showNotes ? (
+              <ul className="list-disc space-y-1.5 pl-5 text-sm text-[#6b7280]">
+                {noteBlocks.map((block, index) => (
+                  <li key={`${block.title ?? 'note'}-${index}`}>
+                    {block.title ? <span className="font-medium text-[#111827]">{block.title}: </span> : null}
+                    {block.body}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

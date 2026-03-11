@@ -14,9 +14,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   ArrowUp,
+  BarChart3,
   Check,
   ChevronDown,
+  Code2,
   Copy,
+  FileText,
   Globe,
   LogOut,
   MessageCircle,
@@ -27,6 +30,7 @@ import {
   Settings,
   Shield,
   Sparkles,
+  TableProperties,
   Trash2,
 } from 'lucide-react';
 
@@ -203,7 +207,7 @@ function renderLineChart(points: ChartPoint[]) {
   const polyline = chartPoints.map((point) => `${point.x},${point.y}`).join(' ');
 
   return (
-    <div className="rounded-3xl border border-[#dcefe8] bg-white p-4 shadow-[0_12px_28px_rgba(16,163,127,0.08)]">
+    <div className="rounded-3xl border border-[#e5e7eb] bg-white p-4 shadow-[0_14px_30px_rgba(15,23,42,0.06)]">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-sm font-medium text-[#0d0d0d]">추이 그래프</span>
         <span className="text-xs text-[#6f6f7b]">상위 {points.length}개 포인트</span>
@@ -225,10 +229,10 @@ function renderLineChart(points: ChartPoint[]) {
           stroke="#d1d5db"
           strokeWidth="1"
         />
-        <polyline fill="none" stroke="#10a37f" strokeWidth="3" points={polyline} />
+        <polyline fill="none" stroke="#4b5563" strokeWidth="3" points={polyline} />
         {chartPoints.map((point) => (
           <g key={`${point.label}-${point.value}`}>
-            <circle cx={point.x} cy={point.y} r="4" fill="#10a37f" />
+            <circle cx={point.x} cy={point.y} r="4" fill="#4b5563" />
             <text
               x={point.x}
               y={point.y - 10}
@@ -259,7 +263,7 @@ function renderBarChart(points: ChartPoint[]) {
   const maxValue = Math.max(...points.map((point) => point.value), 1);
 
   return (
-    <div className="rounded-3xl border border-[#dcefe8] bg-white p-4 shadow-[0_12px_28px_rgba(16,163,127,0.08)]">
+          <div className="rounded-3xl border border-[#e5e7eb] bg-white p-4 shadow-[0_14px_30px_rgba(15,23,42,0.06)]">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-sm font-medium text-[#0d0d0d]">비교 그래프</span>
         <span className="text-xs text-[#6f6f7b]">상위 {points.length}개 항목</span>
@@ -271,9 +275,9 @@ function renderBarChart(points: ChartPoint[]) {
               <span className="truncate text-[#6f6f7b]">{point.label}</span>
               <span className="font-medium text-[#0d0d0d]">{toDisplayText(point.value)}</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-[#eef2f1]">
+            <div className="h-2 overflow-hidden rounded-full bg-[#eceff3]">
               <div
-                className="h-full rounded-full bg-[#10a37f]"
+                className="h-full rounded-full bg-[#4b5563]"
                 style={{ width: `${Math.max((point.value / maxValue) * 100, 4)}%` }}
               />
             </div>
@@ -298,7 +302,7 @@ function CodeBlock({ children, ...props }: any) {
   };
 
   return (
-    <div className="not-prose overflow-hidden rounded-2xl border border-[#e5e5e5] bg-[#1e1e1e] shadow-[0_14px_28px_rgba(13,13,13,0.08)]">
+    <div className="not-prose overflow-hidden rounded-2xl border border-[#2f3136] bg-[#202123] shadow-[0_18px_40px_rgba(15,23,42,0.18)]">
       <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-4 py-2.5">
         <span className="text-xs uppercase tracking-[0.18em] text-[#8e8ea0]">{language}</span>
         <button
@@ -306,7 +310,7 @@ function CodeBlock({ children, ...props }: any) {
           onClick={handleCopy}
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-colors',
-            copied ? 'text-[#10a37f]' : 'text-[#c5c5d2] hover:bg-white/[0.06] hover:text-white'
+            copied ? 'text-white' : 'text-[#c5c5d2] hover:bg-white/[0.06] hover:text-white'
           )}
         >
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
@@ -331,14 +335,14 @@ function SqlCard({ sql }: { sql: string }) {
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl bg-[#1e1e1e] shadow-[0_18px_36px_rgba(13,13,13,0.1)]">
+    <div className="overflow-hidden rounded-2xl border border-[#2f3136] bg-[#202123] shadow-[0_18px_40px_rgba(15,23,42,0.18)]">
       <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
           className="inline-flex items-center gap-2 text-sm text-[#c5c5d2] transition-colors hover:text-white"
         >
-          <Sparkles className="h-4 w-4 text-[#10a37f]" />
+          <Sparkles className="h-4 w-4 text-[#d1d5db]" />
           <span>sql</span>
           <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} />
         </button>
@@ -347,7 +351,7 @@ function SqlCard({ sql }: { sql: string }) {
           onClick={handleCopy}
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-colors',
-            copied ? 'text-[#10a37f]' : 'text-[#8e8ea0] hover:bg-white/[0.06] hover:text-white'
+            copied ? 'text-white' : 'text-[#8e8ea0] hover:bg-white/[0.06] hover:text-white'
           )}
         >
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
@@ -362,6 +366,80 @@ function SqlCard({ sql }: { sql: string }) {
           </pre>
         </div>
       )}
+    </div>
+  );
+}
+
+function LoadingResponseCard() {
+  return (
+    <div className="overflow-hidden rounded-[24px] border border-[#e5e7eb] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
+      <div className="flex items-center justify-between px-5 py-4">
+        <div>
+          <div className="h-4 w-40 animate-pulse rounded bg-[#eef2f7]" />
+          <div className="mt-2 h-3 w-20 animate-pulse rounded bg-[#f3f4f6]" />
+        </div>
+        <div className="inline-flex items-center gap-2 text-sm text-[#4b5563]">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-[#4b5563]" />
+          리포트 생성 중
+        </div>
+      </div>
+
+      <div className="grid gap-3 px-5 pb-3 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="rounded-2xl bg-[#f7f7f8] p-3">
+            <div className="h-3 w-14 animate-pulse rounded bg-[#e5e7eb]" />
+            <div className="mt-2 h-6 w-20 animate-pulse rounded bg-[#eef2f7]" />
+          </div>
+        ))}
+      </div>
+
+      <div className="px-5 pb-4">
+        <div className="mb-2 h-4 w-10 animate-pulse rounded bg-[#e5e7eb]" />
+        <div className="space-y-2">
+          <div className="h-3 w-full animate-pulse rounded bg-[#f3f4f6]" />
+          <div className="h-3 w-[92%] animate-pulse rounded bg-[#f3f4f6]" />
+          <div className="h-3 w-[78%] animate-pulse rounded bg-[#f3f4f6]" />
+        </div>
+      </div>
+
+      <div className="px-5 pb-4">
+        <div className="mb-1 h-4 w-8 animate-pulse rounded bg-[#e5e7eb]" />
+        <div className="mb-3 h-3 w-24 animate-pulse rounded bg-[#f3f4f6]" />
+        <div className="h-56 rounded-2xl bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] p-4">
+          <div className="flex h-full items-end gap-3">
+            {[36, 52, 44, 68, 54, 72, 48].map((height, index) => (
+              <div key={index} className="flex flex-1 flex-col justify-end gap-2">
+                <div
+                  className="animate-pulse rounded-t-full bg-[#dbeafe]"
+                  style={{ height: `${height}%` }}
+                />
+                <div className="mx-auto h-2 w-8 animate-pulse rounded bg-[#e5e7eb]" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="px-5 pb-5">
+        <div className="mb-2 flex items-center gap-2">
+          <div className="h-4 w-14 animate-pulse rounded bg-[#e5e7eb]" />
+          <div className="h-3 w-24 animate-pulse rounded bg-[#f3f4f6]" />
+        </div>
+        <div className="overflow-hidden rounded-lg border border-[#e5e7eb]">
+          <div className="grid grid-cols-2 gap-4 border-b border-[#e5e7eb] bg-[#f9fafb] px-4 py-3">
+            <div className="h-3 w-12 animate-pulse rounded bg-[#e5e7eb]" />
+            <div className="h-3 w-12 animate-pulse rounded bg-[#e5e7eb]" />
+          </div>
+          <div className="space-y-3 px-4 py-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="grid grid-cols-2 gap-4">
+                <div className="h-3 animate-pulse rounded bg-[#f3f4f6]" />
+                <div className="h-3 animate-pulse rounded bg-[#f3f4f6]" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -684,9 +762,9 @@ export default function QueryGeneratorPage() {
             {visualization.metrics.map((metric) => (
               <div
                 key={metric.label}
-                className="rounded-[24px] border border-[#dcefe8] bg-[linear-gradient(180deg,#f5fbf8_0%,#ffffff_100%)] p-4 shadow-[0_10px_24px_rgba(16,163,127,0.08)]"
+                className="rounded-[24px] border border-[#e5e7eb] bg-[linear-gradient(180deg,#f9fafb_0%,#ffffff_100%)] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]"
               >
-                <div className="text-xs font-medium uppercase tracking-wide text-[#10a37f]">
+                <div className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">
                   {metric.label}
                 </div>
                 <div className="mt-2 text-2xl font-semibold text-[#0d0d0d]">
@@ -719,7 +797,7 @@ export default function QueryGeneratorPage() {
               className={cn(
                 'inline-flex items-center gap-1 text-xs transition-colors',
                 copiedId === `csv-${messageId}`
-                  ? 'text-[#10a37f]'
+                  ? 'text-[#111827]'
                   : 'text-[#6f6f7b] hover:text-[#0d0d0d]'
               )}
             >
@@ -774,7 +852,7 @@ export default function QueryGeneratorPage() {
     sessions.find((item) => item.id === currentSessionId)?.title || 'SQL Assistant';
 
   return (
-    <div className="relative flex h-full min-h-0 bg-white">
+    <div className="relative flex h-full min-h-0 bg-[#f7f7f8]">
       {sidebarOpen && !isDesktop && (
         <button
           type="button"
@@ -790,14 +868,14 @@ export default function QueryGeneratorPage() {
           sidebarOpen ? 'w-[280px] opacity-100' : 'w-0 opacity-0'
         )}
       >
-        <aside className="flex h-full w-[280px] flex-col border-r border-[#e5e5e5] bg-[#f9f9f9]">
+        <aside className="flex h-full w-[280px] flex-col border-r border-[#2a2b32] bg-[#202123] text-white">
           <div className="flex items-center gap-2 p-3">
             <button
               type="button"
               onClick={handleNewChat}
-              className="flex flex-1 items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left text-[14px] tracking-tight text-[#0d0d0d] transition-colors hover:bg-[#ececec]"
+              className="flex flex-1 items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-left text-[14px] tracking-tight text-white transition-colors hover:bg-white/[0.08]"
             >
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#10a37f] text-white">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#343541] text-white">
                 <Plus className="h-3.5 w-3.5" />
               </div>
               새 대화
@@ -805,7 +883,7 @@ export default function QueryGeneratorPage() {
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-[#8e8ea0] transition-colors hover:bg-[#ececec] hover:text-[#0d0d0d]"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-[#9ca3af] transition-colors hover:bg-white/[0.08] hover:text-white"
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
@@ -828,8 +906,8 @@ export default function QueryGeneratorPage() {
                     className={cn(
                       'group flex items-start gap-2.5 rounded-2xl px-3 py-2.5 transition-colors',
                       currentSessionId === chatSession.id
-                        ? 'bg-[#ececec]'
-                        : 'hover:bg-[#ececec]/70'
+                        ? 'bg-white/[0.08]'
+                        : 'hover:bg-white/[0.05]'
                     )}
                   >
                     <button
@@ -839,7 +917,7 @@ export default function QueryGeneratorPage() {
                     >
                       <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#8e8ea0]" />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] tracking-tight text-[#0d0d0d]">
+                        <div className="truncate text-[13px] tracking-tight text-white">
                           {chatSession.title || '새 대화'}
                         </div>
                         <div className="mt-1 text-[11px] text-[#8e8ea0]">
@@ -850,7 +928,7 @@ export default function QueryGeneratorPage() {
                     <button
                       type="button"
                       onClick={(event) => deleteSession(chatSession.id, event)}
-                      className="mt-0.5 rounded-md p-1 text-[#b0b0ba] opacity-0 transition hover:bg-white hover:text-[#0d0d0d] group-hover:opacity-100"
+                      className="mt-0.5 rounded-md p-1 text-[#8e8ea0] opacity-0 transition hover:bg-white/[0.08] hover:text-white group-hover:opacity-100"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -860,10 +938,10 @@ export default function QueryGeneratorPage() {
             </div>
           </div>
 
-          <div className="border-t border-[#e5e5e5] p-2">
+          <div className="border-t border-white/10 p-2">
             <Link
               href="/settings"
-              className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] tracking-tight text-[#6f6f7b] transition-colors hover:bg-[#ececec] hover:text-[#0d0d0d]"
+              className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] tracking-tight text-[#c5c5d2] transition-colors hover:bg-white/[0.06] hover:text-white"
             >
               <Settings className="h-4 w-4" />
               설정
@@ -873,14 +951,14 @@ export default function QueryGeneratorPage() {
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-[#e5e5e5]/80 bg-white/90 px-3 backdrop-blur sm:px-4">
+        <header className="border-b border-[#e5e7eb] bg-[#f7f7f8]/95 px-3 backdrop-blur sm:px-4">
           <div className="flex h-14 items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               {!sidebarOpen && (
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(true)}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#8e8ea0] transition-colors hover:bg-[#f7f7f8] hover:text-[#0d0d0d]"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#8e8ea0] transition-colors hover:bg-white hover:text-[#0d0d0d]"
                 >
                   <PanelLeft className="h-4 w-4" />
                 </button>
@@ -888,9 +966,9 @@ export default function QueryGeneratorPage() {
 
               <button
                 type="button"
-                className="inline-flex min-w-0 items-center gap-2 rounded-xl px-3 py-1.5 transition-colors hover:bg-[#f7f7f8]"
+                className="inline-flex min-w-0 items-center gap-2 rounded-xl px-3 py-1.5 transition-colors hover:bg-white"
               >
-                <Sparkles className="h-4 w-4 shrink-0 text-[#10a37f]" />
+                <Sparkles className="h-4 w-4 shrink-0 text-[#6b7280]" />
                 <span className="truncate text-[14px] tracking-tight text-[#0d0d0d]">
                   {currentSessionTitle}
                 </span>
@@ -901,7 +979,7 @@ export default function QueryGeneratorPage() {
             <div className="flex items-center gap-1 sm:gap-2">
               <Link
                 href="/settings"
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-[#6f6f7b] transition-colors hover:bg-[#f7f7f8] hover:text-[#0d0d0d]"
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-[#6f6f7b] transition-colors hover:bg-white hover:text-[#0d0d0d]"
               >
                 <Settings className="h-4 w-4" />
                 <span className="hidden sm:inline">설정</span>
@@ -909,21 +987,21 @@ export default function QueryGeneratorPage() {
               {isAdmin && (
                 <Link
                   href="/admin"
-                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-[#6f6f7b] transition-colors hover:bg-[#f7f7f8] hover:text-[#0d0d0d]"
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm text-[#6f6f7b] transition-colors hover:bg-white hover:text-[#0d0d0d]"
                 >
                   <Shield className="h-4 w-4" />
                   <span className="hidden sm:inline">Admin</span>
                 </Link>
               )}
-              <span className="hidden rounded-full bg-[#f7f7f8] px-3 py-1.5 text-sm text-[#6f6f7b] lg:inline">
+              <span className="hidden rounded-full bg-white px-3 py-1.5 text-sm text-[#6f6f7b] shadow-[inset_0_0_0_1px_rgba(229,231,235,1)] lg:inline">
                 {session?.user?.email}
               </span>
               <button
                 type="button"
                 onClick={() => signOut({ callbackUrl: '/login' })}
-                className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm text-[#6f6f7b] transition-colors hover:bg-[#f7f7f8] hover:text-[#0d0d0d] sm:px-3"
+                className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm text-[#6f6f7b] transition-colors hover:bg-white hover:text-[#0d0d0d] sm:px-3"
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#10a37f] text-xs font-semibold text-white">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#343541] text-xs font-semibold text-white">
                   {userInitial}
                 </div>
                 <LogOut className="h-4 w-4 sm:hidden" />
@@ -933,11 +1011,11 @@ export default function QueryGeneratorPage() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(16,163,127,0.08),transparent_28%),linear-gradient(180deg,#ffffff_0%,#fcfcfc_100%)]">
+        <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(107,114,128,0.08),transparent_26%),linear-gradient(180deg,#f7f7f8_0%,#ffffff_100%)]">
           {messages.length === 0 ? (
             <div className="mx-auto flex min-h-full max-w-[760px] flex-col items-center justify-center px-4 py-12 text-center sm:py-20">
-              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-[22px] bg-white shadow-[0_20px_40px_rgba(13,13,13,0.08)] ring-1 ring-black/5">
-                <Sparkles className="h-7 w-7 text-[#10a37f]" />
+              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-[22px] bg-white shadow-[0_20px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5">
+                <Sparkles className="h-7 w-7 text-[#4b5563]" />
               </div>
               <h2 className="text-3xl font-medium tracking-tight text-[#0d0d0d]">
                 질문을 SQL로 바꿔보세요
@@ -953,7 +1031,7 @@ export default function QueryGeneratorPage() {
                     key={prompt}
                     type="button"
                     onClick={() => setInput(prompt)}
-                    className="rounded-[24px] border border-[#e5e5e5] bg-white px-4 py-4 text-left text-[14px] leading-6 tracking-tight text-[#0d0d0d] shadow-[0_14px_28px_rgba(13,13,13,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#d1d1d1] hover:shadow-[0_20px_40px_rgba(13,13,13,0.08)]"
+                    className="rounded-[24px] border border-[#e5e7eb] bg-white px-4 py-4 text-left text-[14px] leading-6 tracking-tight text-[#0d0d0d] shadow-[0_14px_28px_rgba(15,23,42,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#d7dbdf] hover:shadow-[0_20px_40px_rgba(15,23,42,0.08)]"
                   >
                     {prompt}
                   </button>
@@ -968,12 +1046,12 @@ export default function QueryGeneratorPage() {
                   className={cn('mb-8', message.role === 'user' ? 'flex justify-end' : '')}
                 >
                   {message.role === 'user' ? (
-                    <div className="max-w-[min(82%,540px)] rounded-[28px] bg-[#f7f7f8] px-4 py-3 text-[15px] leading-7 tracking-tight text-[#0d0d0d] shadow-[inset_0_0_0_1px_rgba(229,229,229,0.8)]">
+                    <div className="max-w-[min(82%,540px)] rounded-[28px] bg-white px-4 py-3 text-[15px] leading-7 tracking-tight text-[#0d0d0d] shadow-[0_8px_24px_rgba(15,23,42,0.05),inset_0_0_0_1px_rgba(229,231,235,1)]">
                       {message.content}
                     </div>
                   ) : (
                     <div className="flex w-full gap-4">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#10a37f] text-white">
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#343541] text-white">
                         <Sparkles className="h-4 w-4" />
                       </div>
 
@@ -991,7 +1069,7 @@ export default function QueryGeneratorPage() {
                                 )
                               }
                               disabled={executingQuery === message.id}
-                              className="inline-flex items-center gap-2 rounded-full bg-[#10a37f] px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0e8f70] disabled:cursor-not-allowed disabled:bg-[#b7c5c1]"
+                              className="inline-flex items-center gap-2 rounded-full bg-[#202123] px-3.5 py-2 text-sm font-medium text-white shadow-[0_12px_28px_rgba(15,23,42,0.16)] transition-colors hover:bg-[#171717] disabled:cursor-not-allowed disabled:bg-[#b7c5c1]"
                             >
                               {executingQuery === message.id
                                 ? '리포트 준비 중...'
@@ -1000,9 +1078,32 @@ export default function QueryGeneratorPage() {
                                   ? '다시 실행'
                                   : '리포트 보기'}
                             </button>
-                            <span className="text-xs text-[#8e8ea0]">
-                              AI가 표, 요약, 차트 블록을 구성하고 SQL은 아래 카드에 유지합니다.
-                            </span>
+                            <div className="flex items-center gap-1.5 text-[#8e8ea0]">
+                              <span
+                                title="요약"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(229,231,235,1)]"
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </span>
+                              <span
+                                title="표"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(229,231,235,1)]"
+                              >
+                                <TableProperties className="h-3.5 w-3.5" />
+                              </span>
+                              <span
+                                title="차트"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(229,231,235,1)]"
+                              >
+                                <BarChart3 className="h-3.5 w-3.5" />
+                              </span>
+                              <span
+                                title="SQL"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(229,231,235,1)]"
+                              >
+                                <Code2 className="h-3.5 w-3.5" />
+                              </span>
+                            </div>
                           </div>
                         ) : null}
 
@@ -1010,6 +1111,7 @@ export default function QueryGeneratorPage() {
                           <ReportRenderer
                             presentation={message.presentation}
                             snapshot={message.resultSnapshot}
+                            bodyMarkdown={message.content}
                           />
                         ) : null}
 
@@ -1025,16 +1127,18 @@ export default function QueryGeneratorPage() {
                           </div>
                         ) : null}
 
-                        <div className="prose prose-neutral max-w-none text-[15px] leading-7 text-[#0d0d0d] prose-p:my-0 prose-p:leading-7 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-[#0d0d0d] prose-code:rounded prose-code:bg-[#f7f7f8] prose-code:px-1 prose-code:py-0.5 prose-code:text-[#0d0d0d] prose-code:before:content-none prose-code:after:content-none prose-pre:bg-transparent prose-pre:p-0 prose-table:border-collapse prose-th:border prose-th:border-[#e5e5e5] prose-th:bg-[#f7f7f8] prose-th:px-3 prose-th:py-2 prose-th:text-left prose-td:border prose-td:border-[#e5e5e5] prose-td:px-3 prose-td:py-2">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              pre: CodeBlock,
-                            }}
-                          >
-                            {message.content}
-                          </ReactMarkdown>
-                        </div>
+                        {!message.presentation ? (
+                          <div className="prose prose-neutral max-w-none text-[15px] leading-7 text-[#0d0d0d] prose-p:my-0 prose-p:leading-7 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-[#0d0d0d] prose-code:rounded prose-code:bg-[#f7f7f8] prose-code:px-1 prose-code:py-0.5 prose-code:text-[#0d0d0d] prose-code:before:content-none prose-code:after:content-none prose-pre:bg-transparent prose-pre:p-0 prose-table:border-collapse prose-th:border prose-th:border-[#e5e5e5] prose-th:bg-[#f7f7f8] prose-th:px-3 prose-th:py-2 prose-th:text-left prose-td:border prose-td:border-[#e5e5e5] prose-td:px-3 prose-td:py-2">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                pre: CodeBlock,
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
+                        ) : null}
 
                         <div className="flex items-center gap-2 border-t border-[#efefef] pt-2">
                           <QuickFeedback
@@ -1053,22 +1157,13 @@ export default function QueryGeneratorPage() {
               ))}
 
               {loading && (
-                <div className="flex items-center gap-3 pl-11 text-sm text-[#8e8ea0]">
-                  <div className="flex gap-1">
-                    <span
-                      className="h-2 w-2 rounded-full bg-[#10a37f] animate-bounce"
-                      style={{ animationDelay: '0ms' }}
-                    />
-                    <span
-                      className="h-2 w-2 rounded-full bg-[#10a37f] animate-bounce"
-                      style={{ animationDelay: '150ms' }}
-                    />
-                    <span
-                      className="h-2 w-2 rounded-full bg-[#10a37f] animate-bounce"
-                      style={{ animationDelay: '300ms' }}
-                    />
+                <div className="mb-8 flex w-full gap-4">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#343541] text-white">
+                    <Sparkles className="h-4 w-4" />
                   </div>
-                  응답을 생성하는 중입니다...
+                  <div className="min-w-0 flex-1">
+                    <LoadingResponseCard />
+                  </div>
                 </div>
               )}
 
@@ -1077,9 +1172,9 @@ export default function QueryGeneratorPage() {
           )}
         </div>
 
-        <div className="border-t border-[#e5e5e5] bg-white/95 px-4 pb-4 pt-3 backdrop-blur">
+        <div className="border-t border-[#e5e7eb] bg-[#f7f7f8]/95 px-4 pb-4 pt-3 backdrop-blur">
           <form onSubmit={handleSubmit} className="mx-auto max-w-[760px]">
-            <div className="relative rounded-[28px] border border-[#e5e5e5] bg-[#f7f7f8] transition-all duration-200 focus-within:border-[#d1d1d1] focus-within:shadow-[0_0_0_1px_rgba(13,13,13,0.04)]">
+            <div className="relative rounded-[28px] border border-[#dfe3e8] bg-white transition-all duration-200 focus-within:border-[#cbd5e1] focus-within:shadow-[0_0_0_4px_rgba(148,163,184,0.12)]">
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -1118,7 +1213,7 @@ export default function QueryGeneratorPage() {
                   className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-full text-white transition-all duration-200',
                     input.trim() && !loading
-                      ? 'bg-[#0d0d0d] hover:bg-[#2d2d2d]'
+                      ? 'bg-[#202123] hover:bg-[#171717]'
                       : 'bg-[#d1d5db] cursor-not-allowed'
                   )}
                 >

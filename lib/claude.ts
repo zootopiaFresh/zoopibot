@@ -375,7 +375,7 @@ export async function generatePresentation(
 질문과 SQL 결과를 보고 사람이 이해하기 쉬운 블록형 응답 계획 JSON만 반환하세요.
 
 허용 블록:
-- narrative: 짧은 한국어 요약
+- narrative: 사람이 읽기 쉬운 한국어 설명
 - callout: 상태/주의 안내
 - metric-row: 단일 행 결과의 핵심 수치
 - table: 상세 목록 또는 기본 표
@@ -387,6 +387,11 @@ export async function generatePresentation(
 - 카테고리별 집계는 bar 계열 spec을 우선 사용하세요.
 - 사용자가 보는 제목, 설명, KPI label, table columns.label, chart axis title, tooltip title은 가능한 한 자연스러운 한국어로 작성하세요.
 - field/key 값은 실제 결과 필드명을 유지하고, 사람이 읽는 label/title만 한글로 바꾸세요.
+- 해석이나 쿼리 설명 중 꼭 알아야 할 제약, 시간대, 제외 조건, 해석 주의점이 있으면 callout 블록으로 분리하세요.
+- 요약은 SQL 설명문처럼 쓰지 말고, 사람이 바로 이해할 수 있게 "무슨 결과인지 / 눈에 띄는 값이 무엇인지 / 해석시 주의점이 있는지" 순서의 설명문으로 작성하세요.
+- 요약은 2~4개의 짧은 문단으로 나누고, 문단 사이에는 빈 줄을 넣으세요.
+- 컬럼명만 나열하거나 'period 기준 value' 같은 축약 표현은 금지합니다.
+- 본문은 가능하면 "설명 1개 + 차트/표 + 필요한 주의사항" 구조로 정리하세요.
 - metric-row의 items는 실제 필드명을 field에 넣으세요.
 - table은 rows를 넣지 말고 columns와 maxRows만 정하세요. 프론트가 실제 rows를 주입합니다.
 - vega-lite spec에도 data를 넣지 마세요. 프론트가 data.values를 주입합니다.

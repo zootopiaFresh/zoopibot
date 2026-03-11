@@ -55,11 +55,11 @@ function LoginForm() {
   return (
     <AuthShell
       title="로그인"
-      description="자연어로 SQL을 만들고, 운영 지식과 피드백을 같은 흐름에서 관리하세요."
+      description="업무 질문을 바로 SQL과 리포트로 바꾸는 Zoopibot 워크스페이스에 접속합니다."
       footer={
         <div className="text-center">
           계정이 없으신가요?{' '}
-          <Link href="/register" className="font-medium text-[#10a37f] hover:text-[#0e8b6c]">
+          <Link href="/register" className="font-medium text-indigo-600 hover:text-indigo-700">
             회원가입
           </Link>
         </div>
@@ -78,7 +78,8 @@ function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-2xl border border-[#d7dbd4] bg-white px-4 py-3 shadow-sm outline-none focus:border-[#10a37f] focus:ring-4 focus:ring-[#10a37f]/10"
+                placeholder="name@company.com"
+                className="mt-2 block w-full rounded-2xl border border-[#d9d9e3] bg-[#fbfbfc] px-4 py-3.5 text-[#202123] shadow-sm outline-none focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-600/10"
               />
             </div>
 
@@ -93,7 +94,8 @@ function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-2xl border border-[#d7dbd4] bg-white px-4 py-3 shadow-sm outline-none focus:border-[#10a37f] focus:ring-4 focus:ring-[#10a37f]/10"
+                placeholder="비밀번호를 입력하세요"
+                className="mt-2 block w-full rounded-2xl border border-[#d9d9e3] bg-[#fbfbfc] px-4 py-3.5 text-[#202123] shadow-sm outline-none focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-600/10"
               />
             </div>
           </div>
@@ -113,7 +115,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full justify-center rounded-2xl border border-transparent bg-[#10a37f] px-4 py-3 text-sm font-medium text-white shadow-[0_16px_30px_rgba(16,163,127,0.22)] hover:bg-[#0e8b6c] focus:outline-none focus:ring-4 focus:ring-[#10a37f]/20 disabled:opacity-50"
+            className="flex w-full justify-center rounded-2xl border border-transparent bg-[#202123] px-4 py-3.5 text-sm font-medium text-white shadow-[0_18px_40px_rgba(32,33,35,0.16)] hover:bg-[#171717] focus:outline-none focus:ring-4 focus:ring-indigo-600/15 disabled:opacity-50"
           >
             {loading ? '로그인 중...' : '로그인'}
           </button>
@@ -125,8 +127,8 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f3]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#10a37f] border-t-transparent" />
+      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f8]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
       </div>
     }>
       <LoginForm />

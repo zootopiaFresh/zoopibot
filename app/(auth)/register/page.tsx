@@ -44,11 +44,11 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title="회원가입"
-      description="새 계정을 만들고 승인 기반 SQL Assistant 워크스페이스에 참여하세요."
+      description="새 계정을 만들고 승인 기반 Zoopibot 데이터 워크스페이스에 참여하세요."
       footer={
         <div className="text-center">
           이미 계정이 있으신가요?{' '}
-          <Link href="/login" className="font-medium text-[#10a37f] hover:text-[#0e8b6c]">
+          <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-700">
             로그인
           </Link>
         </div>
@@ -66,7 +66,8 @@ export default function RegisterPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-2xl border border-[#d7dbd4] bg-white px-4 py-3 shadow-sm outline-none focus:border-[#10a37f] focus:ring-4 focus:ring-[#10a37f]/10"
+                placeholder="이름을 입력하세요"
+                className="mt-2 block w-full rounded-2xl border border-[#d9d9e3] bg-[#fbfbfc] px-4 py-3.5 text-[#202123] shadow-sm outline-none focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-600/10"
               />
             </div>
 
@@ -81,7 +82,8 @@ export default function RegisterPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-2xl border border-[#d7dbd4] bg-white px-4 py-3 shadow-sm outline-none focus:border-[#10a37f] focus:ring-4 focus:ring-[#10a37f]/10"
+                placeholder="name@company.com"
+                className="mt-2 block w-full rounded-2xl border border-[#d9d9e3] bg-[#fbfbfc] px-4 py-3.5 text-[#202123] shadow-sm outline-none focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-600/10"
               />
             </div>
 
@@ -97,7 +99,8 @@ export default function RegisterPage() {
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-2xl border border-[#d7dbd4] bg-white px-4 py-3 shadow-sm outline-none focus:border-[#10a37f] focus:ring-4 focus:ring-[#10a37f]/10"
+                placeholder="6자 이상 입력하세요"
+                className="mt-2 block w-full rounded-2xl border border-[#d9d9e3] bg-[#fbfbfc] px-4 py-3.5 text-[#202123] shadow-sm outline-none focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-600/10"
               />
             </div>
           </div>
@@ -111,7 +114,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full justify-center rounded-2xl border border-transparent bg-[#10a37f] px-4 py-3 text-sm font-medium text-white shadow-[0_16px_30px_rgba(16,163,127,0.22)] hover:bg-[#0e8b6c] focus:outline-none focus:ring-4 focus:ring-[#10a37f]/20 disabled:opacity-50"
+            className="flex w-full justify-center rounded-2xl border border-transparent bg-[#202123] px-4 py-3.5 text-sm font-medium text-white shadow-[0_18px_40px_rgba(32,33,35,0.16)] hover:bg-[#171717] focus:outline-none focus:ring-4 focus:ring-indigo-600/15 disabled:opacity-50"
           >
             {loading ? '가입 중...' : '회원가입'}
           </button>
