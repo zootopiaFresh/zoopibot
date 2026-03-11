@@ -118,6 +118,14 @@ ZOOPIBOT_SERVICE_TOKEN=...
 NEXTAUTH_URL=https://zoopibot.example.com
 ```
 
+API 키/Provider만 따로 바꾸려면:
+
+```bash
+./scripts/set-api-key.sh openai-api-key
+./scripts/set-api-key.sh openai-codex
+./scripts/set-api-key.sh anthropic-api-key
+```
+
 그 다음:
 
 ```bash
