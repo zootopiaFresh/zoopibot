@@ -88,6 +88,43 @@ yarn dev
 ./scripts/start.sh
 ```
 
+### 서버 배포용 OpenClaw 부트스트랩
+
+운영 서버에서는 대화형 `setup-openclaw.sh` 대신 `.env`만 채워두고 아래 스크립트를 쓰는 편이 낫습니다.
+
+```bash
+./scripts/bootstrap-openclaw.sh
+```
+
+지원 모드:
+
+- `OPENCLAW_PROVIDER_MODE=openai-api-key`
+  - 필요: `OPENAI_API_KEY`
+  - 기본 모델: `openai/gpt-5.4`
+- `OPENCLAW_PROVIDER_MODE=openai-codex`
+  - 필요: 서버에서 1회 `openclaw models auth login --provider openai-codex`
+  - 기본 모델: `openai-codex/gpt-5.4`
+- `OPENCLAW_PROVIDER_MODE=anthropic-api-key`
+  - 필요: `ANTHROPIC_API_KEY`, `OPENCLAW_PRIMARY_MODEL`
+
+최소 예시:
+
+```bash
+AI_BACKEND=openclaw
+OPENCLAW_PROVIDER_MODE=openai-api-key
+OPENAI_API_KEY=...
+OPENCLAW_GATEWAY_TOKEN=...
+ZOOPIBOT_SERVICE_TOKEN=...
+NEXTAUTH_URL=https://zoopibot.example.com
+```
+
+그 다음:
+
+```bash
+openclaw gateway
+yarn dev
+```
+
 ## 프로젝트 구조
 
 ```
