@@ -17,6 +17,7 @@ interface SchemaPrompt {
   id: string;
   name: string;
   content: string;
+  tags: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -27,6 +28,7 @@ export default function SchemaPromptsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedPrompt, setSelectedPrompt] = useState<SchemaPrompt | null>(null);
   const [editName, setEditName] = useState('');
+  const [editTags, setEditTags] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,6 +68,7 @@ export default function SchemaPromptsPage() {
   const handleSelect = (prompt: SchemaPrompt) => {
     setSelectedPrompt(prompt);
     setEditName(prompt.name);
+    setEditTags(prompt.tags || '');
     setEditContent(prompt.content);
     setEditIsActive(prompt.isActive);
     setIsNewMode(false);
@@ -75,6 +78,7 @@ export default function SchemaPromptsPage() {
   const handleNew = () => {
     setSelectedPrompt(null);
     setEditName('');
+    setEditTags('');
     setEditContent('# 새 스키마 프롬프트\n\n');
     setEditIsActive(true);
     setIsNewMode(true);
@@ -103,6 +107,7 @@ export default function SchemaPromptsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editName,
+          tags: editTags,
           content: editContent,
           isActive: editIsActive,
         }),
@@ -142,6 +147,7 @@ export default function SchemaPromptsPage() {
         showMessage('success', '삭제되었습니다');
         setSelectedPrompt(null);
         setEditName('');
+        setEditTags('');
         setEditContent('');
         await fetchPrompts();
       } else {
@@ -268,6 +274,11 @@ export default function SchemaPromptsPage() {
                       <p className="text-xs text-gray-400 mt-0.5">
                         {Math.round(prompt.content.length / 1024)}KB
                       </p>
+                      {prompt.tags && (
+                        <p className="text-xs text-indigo-500 mt-1 truncate">
+                          {prompt.tags}
+                        </p>
+                      )}
                     </div>
                     <button
                       onClick={(e) => handleToggleActive(prompt, e)}
@@ -296,40 +307,54 @@ export default function SchemaPromptsPage() {
           {selectedPrompt || isNewMode ? (
             <>
               {/* 에디터 헤더 */}
-              <div className="flex items-center gap-4 p-4 border-b border-gray-200">
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  placeholder="프롬프트 이름 (예: 01-member)"
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <label className="flex items-center gap-2 cursor-pointer">
+              <div className="p-4 border-b border-gray-200 space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto_auto] gap-4 items-center">
                   <input
-                    type="checkbox"
-                    checked={editIsActive}
-                    onChange={(e) => setEditIsActive(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="프롬프트 이름 (예: 01-member)"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
-                  <span className="text-sm text-gray-600">활성화</span>
-                </label>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                >
-                  <Save className="w-4 h-4" />
-                  {saving ? '저장 중...' : '저장'}
-                </button>
-                {!isNewMode && (
-                  <button
-                    onClick={handleDelete}
-                    className="flex items-center gap-2 px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    삭제
-                  </button>
-                )}
+                  <input
+                    type="text"
+                    value={editTags}
+                    onChange={(e) => setEditTags(e.target.value)}
+                    placeholder="태그 (예: 회원, 가입, member)"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={editIsActive}
+                      onChange={(e) => setEditIsActive(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-gray-600">활성화</span>
+                  </label>
+                  <div className="flex items-center gap-2 justify-end">
+                    <button
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                    >
+                      <Save className="w-4 h-4" />
+                      {saving ? '저장 중...' : '저장'}
+                    </button>
+                    {!isNewMode && (
+                      <button
+                        onClick={handleDelete}
+                        className="flex items-center gap-2 px-4 py-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  태그는 쉼표로 구분합니다. 질문 1차 분류와 스키마 선택 우선순위에 사용됩니다.
+                </p>
               </div>
 
               {/* 마크다운 에디터 */}

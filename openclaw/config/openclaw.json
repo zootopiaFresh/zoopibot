@@ -1,0 +1,47 @@
+{
+  "$schema": "https://openclaw.ai/schema/openclaw.json",
+
+  "env": {
+    "OPENAI_API_KEY": "<YOUR_OPENAI_API_KEY>"
+  },
+
+  "agents": {
+    "defaults": {
+      "workspace": "~/.openclaw/workspace",
+      "model": {
+        "primary": "openai/gpt-5.4"
+      }
+    }
+  },
+
+  "channels": {
+    "slack": {
+      "mode": "socket"
+    }
+  },
+
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "auth": {
+      "token": "<YOUR_OPENCLAW_GATEWAY_TOKEN>"
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": { "enabled": true }
+      }
+    }
+  },
+
+  "skills": {
+    "entries": {
+      "zoopibot-query": {
+        "enabled": true,
+        "env": {
+          "ZOOPIBOT_URL": "http://localhost:3000",
+          "ZOOPIBOT_SERVICE_TOKEN": "<YOUR_SERVICE_TOKEN>"
+        }
+      }
+    }
+  }
+}

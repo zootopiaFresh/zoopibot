@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 
+import { AuthShell } from '@/components/auth/auth-shell';
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -51,17 +53,22 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
-        <div>
-          <h2 className="text-3xl font-bold text-center text-gray-800">SQL Assistant</h2>
-          <p className="mt-2 text-center text-gray-500">자연어로 SQL 쿼리를 생성하세요</p>
+    <AuthShell
+      title="로그인"
+      description="업무 질문을 바로 SQL과 리포트로 바꾸는 Zoopibot 워크스페이스에 접속합니다."
+      footer={
+        <div className="text-center">
+          계정이 없으신가요?{' '}
+          <Link href="/register" className="font-medium text-indigo-600 hover:text-indigo-700">
+            회원가입
+          </Link>
         </div>
-
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+      }
+    >
+      <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="block text-sm font-medium text-[#353740]">
                 이메일
               </label>
               <input
@@ -71,12 +78,13 @@ function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="name@company.com"
+                className="mt-2 block w-full rounded-2xl border border-[#d9d9e3] bg-[#fbfbfc] px-4 py-3.5 text-[#202123] shadow-sm outline-none focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-600/10"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-medium text-[#353740]">
                 비밀번호
               </label>
               <input
@@ -86,45 +94,41 @@ function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="비밀번호를 입력하세요"
+                className="mt-2 block w-full rounded-2xl border border-[#d9d9e3] bg-[#fbfbfc] px-4 py-3.5 text-[#202123] shadow-sm outline-none focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-600/10"
               />
             </div>
           </div>
 
           {successMessage && (
-            <div className="bg-blue-50 text-blue-700 text-sm text-center p-3 rounded-md">
+            <div className="rounded-2xl border border-[#cfe8de] bg-[#eefaf6] p-3 text-center text-sm text-[#116149]">
               {successMessage}
             </div>
           )}
 
           {error && (
-            <div className="text-red-600 text-sm text-center">{error}</div>
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-center text-sm text-red-600">
+              {error}
+            </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            className="flex w-full justify-center rounded-2xl border border-transparent bg-[#202123] px-4 py-3.5 text-sm font-medium text-white shadow-[0_18px_40px_rgba(32,33,35,0.16)] hover:bg-[#171717] focus:outline-none focus:ring-4 focus:ring-indigo-600/15 disabled:opacity-50"
           >
             {loading ? '로그인 중...' : '로그인'}
           </button>
-
-          <div className="text-center text-sm">
-            <Link href="/register" className="text-indigo-600 hover:text-indigo-500">
-              계정이 없으신가요? 회원가입
-            </Link>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </AuthShell>
   );
 }
 
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full" />
+      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f8]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
       </div>
     }>
       <LoginForm />

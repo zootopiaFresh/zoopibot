@@ -19,6 +19,19 @@ const config = {
     },
     extend: {
       colors: {
+        indigo: {
+          50: "#eefbf7",
+          100: "#d6f5ea",
+          200: "#afe9d3",
+          300: "#7fd9b8",
+          400: "#43c49b",
+          500: "#20b488",
+          600: "#10a37f",
+          700: "#0e8b6c",
+          800: "#116e57",
+          900: "#0f5a48",
+          950: "#08352b",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

@@ -85,7 +85,7 @@ export function PreferenceForm() {
   };
 
   if (loading) {
-    return <div className="p-6 text-gray-500">로딩 중...</div>;
+    return <div className="p-6 text-[#6e6e80]">로딩 중...</div>;
   }
 
   if (!preference) {
@@ -96,7 +96,7 @@ export function PreferenceForm() {
     <div className="space-y-6">
       {Object.entries(OPTIONS).map(([key, options]) => (
         <div key={key}>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="mb-2 block text-sm font-medium text-[#353740]">
             {LABELS[key as keyof typeof LABELS]}
           </label>
           <div className="flex flex-wrap gap-2">
@@ -105,10 +105,10 @@ export function PreferenceForm() {
                 key={opt.value}
                 type="button"
                 onClick={() => handleChange(key as keyof UserPreferenceData, opt.value)}
-                className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                className={`rounded-xl border px-4 py-2 text-sm transition-colors ${
                   preference[key as keyof UserPreferenceData] === opt.value
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    ? 'border-[#10a37f] bg-[#10a37f] text-white shadow-[0_10px_20px_rgba(16,163,127,0.16)]'
+                    : 'border-[#d7dbd4] bg-white text-[#4f5660] hover:border-[#10a37f]/30 hover:bg-[#f8fbf9]'
                 }`}
               >
                 {opt.label}
@@ -120,9 +120,9 @@ export function PreferenceForm() {
 
       {message && (
         <div
-          className={`p-3 rounded-lg text-sm ${
+          className={`rounded-xl p-3 text-sm ${
             message.type === 'success'
-              ? 'bg-green-50 text-green-700'
+              ? 'bg-[#eefaf6] text-[#116149]'
               : 'bg-red-50 text-red-700'
           }`}
         >
@@ -133,7 +133,7 @@ export function PreferenceForm() {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+        className="rounded-xl bg-[#10a37f] px-6 py-2 text-white transition-colors hover:bg-[#0e8b6c] disabled:opacity-50"
       >
         {saving ? '저장 중...' : '저장'}
       </button>

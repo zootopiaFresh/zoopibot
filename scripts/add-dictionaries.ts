@@ -7,6 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { getDefaultSchemaTags } from '../lib/schema-taxonomy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,12 +56,14 @@ async function main() {
       where: { name: dict.name },
       update: {
         content,
+        tags: getDefaultSchemaTags(dict.name).join(', '),
         isActive: true,
         updatedAt: new Date(),
       },
       create: {
         name: dict.name,
         content,
+        tags: getDefaultSchemaTags(dict.name).join(', '),
         isActive: true,
       },
     });

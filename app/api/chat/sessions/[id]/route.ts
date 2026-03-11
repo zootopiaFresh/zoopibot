@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { parseStoredPresentation, parseStoredQueryResult } from '@/lib/presentation';
 
 // GET: 세션 상세 (메시지 포함)
 export async function GET(
@@ -28,7 +29,16 @@ export async function GET(
       return NextResponse.json({ error: '세션을 찾을 수 없습니다' }, { status: 404 });
     }
 
-    return NextResponse.json({ session: chatSession });
+    return NextResponse.json({
+      session: {
+        ...chatSession,
+        messages: chatSession.messages.map((message) => ({
+          ...message,
+          presentation: parseStoredPresentation(message.presentation),
+          resultSnapshot: parseStoredQueryResult(message.resultSnapshot),
+        })),
+      },
+    });
   } catch (error) {
     console.error('Session fetch error:', error);
     return NextResponse.json({ error: '세션 조회 실패' }, { status: 500 });
