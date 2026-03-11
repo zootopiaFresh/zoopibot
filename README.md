@@ -107,6 +107,70 @@ yarn dev
 - `OPENCLAW_PROVIDER_MODE=anthropic-api-key`
   - 필요: `ANTHROPIC_API_KEY`, `OPENCLAW_PRIMARY_MODEL`
 
+### OpenClaw + Claude CLI setup-token 사용
+
+Anthropic API 키 대신 Claude CLI의 `setup-token`을 OpenClaw에 넣어 사용할 수도 있습니다.
+
+주의:
+
+- 이 경로는 전용 스크립트로 자동화할 수 있습니다.
+
+가장 빠른 방법:
+
+```bash
+./scripts/setup-openclaw-claude-token.sh
+```
+
+이 스크립트가 처리하는 것:
+
+- Claude CLI 기반 `setup-token` 인증
+- `.env`에 `AI_BACKEND`, `OPENCLAW_PROVIDER_MODE`, `OPENCLAW_PRIMARY_MODEL` 저장
+- `OPENCLAW_GATEWAY_TOKEN`, `ZOOPIBOT_SERVICE_TOKEN` 자동 생성
+- `~/.openclaw/openclaw.json` 생성
+
+수동으로 하려면:
+
+1. Claude CLI에서 setup-token 발급
+
+```bash
+claude setup-token
+```
+
+2. OpenClaw에 Anthropic setup-token 등록
+
+```bash
+./scripts/openclaw-cli.sh models auth setup-token --provider anthropic
+```
+
+또는 토큰 문자열을 직접 붙여넣는 방식:
+
+```bash
+./scripts/openclaw-cli.sh models auth paste-token --provider anthropic
+```
+
+3. 프로젝트 `.env`에 OpenClaw provider와 모델 지정
+
+```bash
+AI_BACKEND=openclaw
+OPENCLAW_PROVIDER_MODE=anthropic-setup-token
+OPENCLAW_PRIMARY_MODEL=anthropic/claude-opus-4-6
+OPENCLAW_GATEWAY_TOKEN=...
+ZOOPIBOT_SERVICE_TOKEN=...
+NEXTAUTH_URL=https://zoopibot.example.com
+```
+
+4. Gateway 실행
+
+```bash
+./scripts/openclaw-cli.sh gateway
+yarn dev
+```
+
+참고:
+
+- `setup-token` 경로에서는 `ANTHROPIC_API_KEY`가 없어도 됩니다.
+- 실제 인증 정보는 `~/.openclaw` 쪽 OpenClaw 인증 저장소에 들어가고, 프로젝트 `.env`에는 모델 선택만 남깁니다.
+
 최소 예시:
 
 ```bash
