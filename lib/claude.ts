@@ -359,18 +359,78 @@ function sanitizePresentation(
   };
 }
 
+function summarizeBlockShape(block: ReportBlock) {
+  if (block.type === 'metric-row') {
+    return {
+      type: block.type,
+      title: block.title,
+      fields: block.items.map((item) => item.field),
+    };
+  }
+
+  if (block.type === 'table') {
+    return {
+      type: block.type,
+      title: block.title,
+      columns: block.columns.map((column) => column.key),
+      maxRows: block.maxRows,
+    };
+  }
+
+  if (block.type === 'vega-lite') {
+    return {
+      type: block.type,
+      title: block.title,
+      description: block.description,
+      xField: block.spec?.encoding?.x?.field,
+      yField: block.spec?.encoding?.y?.field,
+      mark: typeof block.spec?.mark === 'string'
+        ? block.spec.mark
+        : block.spec?.mark?.type,
+    };
+  }
+
+  if (block.type === 'narrative' || block.type === 'callout') {
+    return {
+      type: block.type,
+      title: block.title,
+    };
+  }
+}
+
+function buildPreviousPresentationPrompt(previousPresentation?: ReportPresentation) {
+  if (!previousPresentation) {
+    return '';
+  }
+
+  const compactLayout = {
+    title: previousPresentation.title,
+    blocks: previousPresentation.blocks.map(summarizeBlockShape),
+  };
+
+  return `
+이전 응답 레이아웃 참고:
+${JSON.stringify(compactLayout, null, 2)}
+
+가능하면 위와 비슷한 정보 구조와 블록 순서를 유지하세요.
+단, 현재 결과와 맞지 않으면 억지로 맞추지 말고 현재 데이터에 더 적합한 구성을 선택하세요.
+`;
+}
+
 export async function generatePresentation(
   question: string,
   sql: string,
   explanation: string,
   snapshot: QueryResultSnapshot,
-  sessionId?: string
+  sessionId?: string,
+  previousPresentation?: ReportPresentation
 ): Promise<ReportPresentation> {
   if (snapshot.rows.length === 0) {
     return buildFallbackPresentation(question, explanation, snapshot);
   }
 
   const previewRows = snapshot.rows.slice(0, 20);
+  const previousPresentationPrompt = buildPreviousPresentationPrompt(previousPresentation);
   const prompt = `당신은 BI 리포트 편집자입니다.
 질문과 SQL 결과를 보고 사람이 이해하기 쉬운 블록형 응답 계획 JSON만 반환하세요.
 
@@ -421,6 +481,8 @@ ${sql}
 설명:
 ${explanation}
 
+${previousPresentationPrompt}
+
 결과 메타:
 - 총 ${snapshot.totalRows}행
 - ${snapshot.truncated ? '상위 100행만 저장됨' : '전체 결과 저장됨'}
@@ -431,15 +493,43 @@ ${JSON.stringify(snapshot.fields, null, 2)}
 결과 미리보기:
 ${JSON.stringify(previewRows, null, 2)}`;
 
+  let raw = '';
   try {
-    const raw = await runAI(prompt, {
+    raw = await runAI(prompt, {
       sessionKey: sessionId ? `${sessionId}:presentation` : undefined,
       timeout: 30000,
     });
     const parsed = reportPresentationSchema.parse(JSON.parse(extractJsonObject(raw)));
     return sanitizePresentation(parsed, snapshot, explanation, question);
-  } catch (error) {
-    console.warn('[generatePresentation] fallback:', error);
+  } catch (error: any) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorType =
+      raw.trim().length > 0
+        ? 'parse_error'
+        : errorMessage.includes('시간이 초과')
+          ? 'timeout'
+          : 'cli_error';
+
+    console.warn('[generatePresentation] fallback:', {
+      error: errorMessage,
+      hasPreviousPresentation: Boolean(previousPresentation),
+      rawPreview: raw.substring(0, 300),
+    });
+
+    logGenerationError({
+      errorType,
+      errorMessage: `presentation fallback: ${errorMessage}`,
+      sessionId,
+      prompt: question,
+      rawResponse: raw || undefined,
+      metadata: {
+        stage: 'generatePresentation',
+        hasPreviousPresentation: Boolean(previousPresentation),
+        previousPresentationTitle: previousPresentation?.title,
+        snapshotFieldNames: snapshot.fields.map((field) => field.name),
+      },
+    });
+
     return buildFallbackPresentation(question, explanation, snapshot);
   }
 }

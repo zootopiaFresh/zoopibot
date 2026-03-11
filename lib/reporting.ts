@@ -1,6 +1,30 @@
+import { prisma } from './db';
 import { generatePresentation } from './claude';
 import { executeQuery } from './mysql';
-import { queryResultSnapshotSchema, type QueryResultSnapshot, type ReportPresentation } from './presentation';
+import {
+  parseStoredPresentation,
+  queryResultSnapshotSchema,
+  type QueryResultSnapshot,
+  type ReportPresentation,
+} from './presentation';
+
+async function getPreviousPresentation(sessionId?: string): Promise<ReportPresentation | undefined> {
+  if (!sessionId) {
+    return undefined;
+  }
+
+  const latestAssistantMessage = await prisma.chatMessage.findFirst({
+    where: {
+      sessionId,
+      role: 'assistant',
+      presentation: { not: null },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { presentation: true },
+  });
+
+  return parseStoredPresentation(latestAssistantMessage?.presentation) ?? undefined;
+}
 
 export async function buildPresentationFromSQL(
   question: string,
@@ -15,7 +39,15 @@ export async function buildPresentationFromSQL(
     totalRows: result.rows.length,
     truncated: result.rows.length > 100,
   });
-  const presentation = await generatePresentation(question, sql, explanation, snapshot, sessionId);
+  const previousPresentation = await getPreviousPresentation(sessionId);
+  const presentation = await generatePresentation(
+    question,
+    sql,
+    explanation,
+    snapshot,
+    sessionId,
+    previousPresentation
+  );
 
   return {
     snapshot,
