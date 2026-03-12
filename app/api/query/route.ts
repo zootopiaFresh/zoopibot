@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { generateSQL } from '@/lib/claude';
 import { prisma } from '@/lib/db';
-import { resolveSchemaContext } from '@/lib/schema-explorer';
+import { generateSQLWithRecovery } from '@/lib/query-orchestrator';
 import { z } from 'zod';
 
 const requestSchema = z.object({
@@ -22,8 +21,10 @@ export async function POST(req: NextRequest) {
 
     const userId = (session.user as any).id;
 
-    const { schema } = await resolveSchemaContext(prompt);
-    const result = await generateSQL(prompt, schema, undefined, undefined, userId);
+    const { result } = await generateSQLWithRecovery({
+      question: prompt,
+      userId,
+    });
 
     // 히스토리 저장
     await prisma.history.create({

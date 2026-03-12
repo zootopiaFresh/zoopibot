@@ -59,7 +59,7 @@ interface ChatHistory {
   sql?: string;
 }
 
-interface SQLResponse {
+export interface SQLResponse {
   sql: string;
   explanation: string;
   needsData?: boolean;
@@ -215,6 +215,7 @@ ${stylePrompt}${contextPrompt}${feedbackPrompt}${frequentTablesPrompt}
 - 질문과 맞는 테이블/컬럼이 보이면 그 정보를 근거로 SQL을 적극적으로 작성하세요.
 - 제공된 테이블/컬럼만 사용하고, 없는 테이블이나 컬럼을 새로 지어내지는 마세요.
 - 정말로 핵심 테이블이나 핵심 컬럼이 전혀 없을 때만 explanation에 한계를 적으세요. 이미 보이는 스키마가 있으면 다시 스키마를 요청하지 마세요.
+- explanation에는 "더 찾아볼게요", "탐색해볼게요", "확인해볼게요"처럼 후속 행동을 약속하는 표현을 쓰지 마세요. 이 응답이 곧 최종 응답이라고 가정하고 현재 가능한 답만 말하세요.
 
 **반드시** 아래 JSON 형식으로만 응답하세요. JSON 외의 텍스트는 절대 포함하지 마세요:
 {"sql": "SELECT ...", "explanation": "이 쿼리는...", "needsData": false, "dataQuery": ""}

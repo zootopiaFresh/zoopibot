@@ -18,6 +18,13 @@ interface SchemaExplorationPlan {
   reason: string;
 }
 
+interface SchemaExplorationOptions {
+  limit?: number;
+  excludedTables?: string[];
+  retryReason?: string;
+  previousSelectedItems?: string[];
+}
+
 export interface ResolvedSchemaContext {
   schema: string;
   source: 'mysql-explorer' | 'schema-prompts';
@@ -97,8 +104,23 @@ function parsePlannerResponse(raw: string): SchemaExplorationPlan {
 async function planSchemaExploration(
   question: string,
   history?: ChatHistoryLike[],
-  sessionId?: string
+  sessionId?: string,
+  options?: SchemaExplorationOptions
 ): Promise<SchemaExplorationPlan> {
+  const excludedTables = options?.excludedTables?.filter(Boolean) ?? [];
+  const previousSelectedItems = options?.previousSelectedItems?.filter(Boolean) ?? [];
+  const retryContext = options?.retryReason?.trim()
+    ? `
+이전 시도에서 충분한 스키마를 찾지 못했습니다.
+- 이미 확인한 테이블: ${previousSelectedItems.length > 0 ? previousSelectedItems.join(', ') : '없음'}
+- 이전 응답 요약: ${truncateText(options.retryReason, 400)}
+
+이번에는 기존 후보를 반복하지 말고, 대체 용어/연관 엔티티/프로필·상세·매핑 테이블까지 넓혀서 찾으세요.
+`
+    : '';
+  const exclusionRule = excludedTables.length > 0
+    ? `- excludedTables에 포함된 테이블은 tableCandidates에 다시 넣지 마세요: ${excludedTables.join(', ')}`
+    : '';
   const plannerPrompt = `당신은 MySQL 스키마 탐색 플래너입니다.
 사용자 질문에 답하기 위해 어떤 테이블/컬럼을 먼저 찾아봐야 하는지 짧게 계획하세요.
 SQL은 작성하지 마세요.
@@ -111,8 +133,11 @@ SQL은 작성하지 마세요.
 - tableCandidates: 추정 가능한 테이블명 후보 0~4개
 - columnCandidates: 추정 가능한 컬럼명 후보 0~8개
 - 가능하면 실제 MySQL 식별자 스타일을 우선하세요. 예: member, order_detail, createdAt, member_no
+- 질문에 직접 나온 단어 외에도, 관계/상세/프로필/매핑/설정/가족 등 한 단계 넓은 연관 엔티티를 고려하세요.
+${exclusionRule}
 - JSON 외 텍스트를 쓰지 마세요.
 
+${retryContext}
 ${buildRecentUserContext(history)}현재 질문:
 ${question}`;
 
@@ -127,16 +152,18 @@ ${question}`;
 export async function resolveSchemaContext(
   question: string,
   history?: ChatHistoryLike[],
-  sessionId?: string
+  sessionId?: string,
+  options?: SchemaExplorationOptions
 ): Promise<ResolvedSchemaContext> {
   try {
-    const plan = await planSchemaExploration(question, history, sessionId);
+    const plan = await planSchemaExploration(question, history, sessionId, options);
     const searchResults = await searchMySQLSchema({
       question,
       searchTerms: plan.searchTerms,
       tableCandidates: plan.tableCandidates,
       columnCandidates: plan.columnCandidates,
-      limit: 4,
+      excludeTables: options?.excludedTables,
+      limit: options?.limit ?? 4,
     });
 
     if (searchResults.length > 0) {

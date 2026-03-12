@@ -294,9 +294,13 @@ export async function searchMySQLSchema(options: {
   searchTerms?: string[];
   tableCandidates?: string[];
   columnCandidates?: string[];
+  excludeTables?: string[];
   limit?: number;
 }): Promise<SchemaSearchResult[]> {
   const catalog = await getMySQLSchemaCatalog();
+  const excludedTables = new Set(
+    (options.excludeTables ?? []).map((tableName) => normalizeSchemaSearchText(tableName))
+  );
   const searchTerms = [
     options.question,
     ...(options.searchTerms ?? []),
@@ -334,6 +338,10 @@ export async function searchMySQLSchema(options: {
 
   for (const result of mergedResults) {
     if (seenTables.has(result.tableName)) {
+      continue;
+    }
+
+    if (excludedTables.has(normalizeSchemaSearchText(result.tableName))) {
       continue;
     }
 

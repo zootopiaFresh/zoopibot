@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateServiceToken, unauthorizedResponse, getUserIdBySlackId } from '@/lib/service-auth';
-import { generateSQL } from '@/lib/claude';
-import { resolveSchemaContext } from '@/lib/schema-explorer';
-import { executeQuery } from '@/lib/mysql';
 import { logGenerationError } from '@/lib/error-logger';
 import { updateTableUsage, extractTableNames } from '@/lib/learning';
 import { prisma } from '@/lib/db';
 import { buildPresentationFromSQL } from '@/lib/reporting';
 import { serializePresentation, serializeQueryResult } from '@/lib/presentation';
+import { generateSQLWithRecovery } from '@/lib/query-orchestrator';
 import { z } from 'zod';
 
 const requestSchema = z.object({
@@ -70,33 +68,15 @@ export async function POST(req: NextRequest) {
       activeSessionId = newSession.id;
     }
 
-    // 현재 질문과 세션 맥락에 맞는 스키마를 도구형 탐색으로 결정
-    const { schema } = await resolveSchemaContext(question, history, activeSessionId);
-
     // SQL 생성
-    let result = await generateSQL(question, schema, history, undefined, userId, activeSessionId);
+    const { result } = await generateSQLWithRecovery({
+      question,
+      history,
+      userId,
+      sessionId: activeSessionId,
+    });
     let presentation;
     let resultSnapshot;
-
-    // Claude가 실제 데이터 확인이 필요한 경우
-    if (result.needsData && result.dataQuery) {
-      try {
-        const queryResult = await executeQuery(result.dataQuery);
-        result = await generateSQL(question, schema, history, {
-          query: result.dataQuery,
-          data: queryResult.rows,
-        }, userId, activeSessionId);
-      } catch (queryError: any) {
-        logGenerationError({
-          errorType: 'db_query_error',
-          errorMessage: `데이터 확인 쿼리 실패: ${queryError.message}`,
-          userId,
-          sessionId: activeSessionId,
-          prompt: question,
-          metadata: { dataQuery: result.dataQuery },
-        });
-      }
-    }
 
     let assistantMessageId: string | null = null;
 

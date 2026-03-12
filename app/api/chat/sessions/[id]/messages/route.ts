@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { generateSQL } from '@/lib/claude';
-import { resolveSchemaContext } from '@/lib/schema-explorer';
-import { executeQuery } from '@/lib/mysql';
 import { logGenerationError } from '@/lib/error-logger';
 import { parseStoredPresentation, parseStoredQueryResult, serializePresentation, serializeQueryResult } from '@/lib/presentation';
+import { generateSQLWithRecovery } from '@/lib/query-orchestrator';
 import { buildPresentationFromSQL } from '@/lib/reporting';
 import { z } from 'zod';
 
@@ -61,48 +59,14 @@ export async function POST(
     }));
 
     const sessionId = params.id;
-    const { schema } = await resolveSchemaContext(content, history, sessionId);
-
-    // Claude에게 요청 (사용자 선호도 적용, sessionId 전달)
-    let result = await generateSQL(content, schema, history, undefined, userId, sessionId);
+    const { result } = await generateSQLWithRecovery({
+      question: content,
+      history,
+      userId,
+      sessionId,
+    });
     let presentation = null;
     let resultSnapshot = null;
-
-    // Claude가 실제 데이터 확인이 필요하다고 판단한 경우
-    if (result.needsData && result.dataQuery) {
-      console.log('[Chat API] Claude requested data verification:', result.dataQuery);
-      try {
-        const queryResult = await executeQuery(result.dataQuery);
-        console.log('[Chat API] Data fetched:', queryResult.rows.length, 'rows');
-
-        // 실제 데이터와 함께 다시 질문
-        result = await generateSQL(content, schema, history, {
-          query: result.dataQuery,
-          data: queryResult.rows
-        }, userId, sessionId);
-      } catch (queryError: any) {
-        console.error('[Chat API] Data query failed:', queryError.message);
-
-        // 데이터 쿼리 실패 로그 저장
-        logGenerationError({
-          errorType: 'db_query_error',
-          errorMessage: `데이터 확인 쿼리 실패: ${queryError.message}`,
-          userId,
-          sessionId,
-          prompt: content,
-          metadata: { dataQuery: result.dataQuery }
-        });
-
-        // 쿼리 실패 시 사용자에게 알림
-        result = {
-          ...result,
-          sql: '',
-          explanation: `⚠️ 데이터 확인 중 오류가 발생했습니다: ${queryError.message}\n\n시도한 쿼리:\n\`\`\`sql\n${result.dataQuery}\n\`\`\`\n\n질문을 다시 시도해주세요.`,
-          needsData: false,
-          parseError: true
-        };
-      }
-    }
 
     if (autoExecute && result.sql) {
       try {
