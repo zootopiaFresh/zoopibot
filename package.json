@@ -10,7 +10,8 @@
     "start:app": "sh -c 'next start -p ${PORT:-3000}'",
     "lint": "next lint",
     "db:seed": "tsx scripts/add-dictionaries.ts",
-    "db:seed:dict": "tsx scripts/add-dictionaries.ts"
+    "db:seed:dict": "tsx scripts/add-dictionaries.ts",
+    "admin:create": "tsx scripts/create-admin.ts"
   },
   "prisma": {
     "seed": "tsx scripts/add-dictionaries.ts"

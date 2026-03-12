@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { logGenerationError } from '@/lib/error-logger';
 import { parseStoredPresentation, parseStoredQueryResult, serializePresentation, serializeQueryResult } from '@/lib/presentation';
 import { generateSQLWithRecovery } from '@/lib/query-orchestrator';
-import { buildPresentationFromSQL } from '@/lib/reporting';
+import { buildPresentationFromQueryResult, buildPresentationFromSQL } from '@/lib/reporting';
 import { z } from 'zod';
 
 const requestSchema = z.object({
@@ -59,18 +59,27 @@ export async function POST(
     }));
 
     const sessionId = params.id;
-    const { result } = await generateSQLWithRecovery({
+    const { result, validatedExecution } = await generateSQLWithRecovery({
       question: content,
       history,
       userId,
       sessionId,
+      validateFinalSql: autoExecute,
     });
     let presentation = null;
     let resultSnapshot = null;
 
-    if (autoExecute && result.sql) {
+    if (autoExecute && result.sql && result.validated !== false) {
       try {
-        const report = await buildPresentationFromSQL(content, result.sql, result.explanation, sessionId);
+        const report = validatedExecution
+          ? await buildPresentationFromQueryResult(
+              content,
+              result.sql,
+              result.explanation,
+              validatedExecution,
+              sessionId
+            )
+          : await buildPresentationFromSQL(content, result.sql, result.explanation, sessionId);
         presentation = report.presentation;
         resultSnapshot = report.snapshot;
       } catch (queryError: any) {
@@ -120,6 +129,10 @@ export async function POST(
         sql: result.sql,
         explanation: result.explanation,
         parseError: result.parseError || false,
+        validated: result.validated ?? false,
+        validationError: result.validationError || null,
+        validationMode: result.validationMode || 'none',
+        validationAttempts: result.validationAttempts ?? 0,
         presentation: parseStoredPresentation(assistantMessage.presentation),
         resultSnapshot: parseStoredQueryResult(assistantMessage.resultSnapshot),
       }

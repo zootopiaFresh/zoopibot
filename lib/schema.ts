@@ -224,11 +224,17 @@ async function loadSchemaPromptsFromDB(): Promise<CachedSchemaPrompt[]> {
 async function getCachedSchemaPrompts(): Promise<CachedSchemaPrompt[]> {
   const now = Date.now();
 
-  if (promptCache && now - cacheTimestamp < CACHE_TTL) {
+  if (promptCache && promptCache.length > 0 && now - cacheTimestamp < CACHE_TTL) {
     return promptCache;
   }
 
   promptCache = await loadSchemaPromptsFromDB();
+  if (promptCache.length === 0) {
+    schemaCache = null;
+    cacheTimestamp = 0;
+    return promptCache;
+  }
+
   schemaCache = promptCache.map((prompt) => prompt.chunk).join('\n');
   cacheTimestamp = now;
 
@@ -364,6 +370,12 @@ export async function getCachedSchema(): Promise<string> {
   }
 
   const prompts = await getCachedSchemaPrompts();
+  if (prompts.length === 0) {
+    schemaCache = null;
+    cacheTimestamp = 0;
+    return '';
+  }
+
   schemaCache = prompts.map((prompt) => prompt.chunk).join('\n');
   cacheTimestamp = now;
 

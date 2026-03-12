@@ -26,19 +26,26 @@ async function getPreviousPresentation(sessionId?: string): Promise<ReportPresen
   return parseStoredPresentation(latestAssistantMessage?.presentation) ?? undefined;
 }
 
-export async function buildPresentationFromSQL(
+function buildSnapshotFromQueryResult(
+  rows: any[],
+  fields: any[]
+): QueryResultSnapshot {
+  return queryResultSnapshotSchema.parse({
+    rows: rows.slice(0, 100),
+    fields,
+    totalRows: rows.length,
+    truncated: rows.length > 100,
+  });
+}
+
+export async function buildPresentationFromQueryResult(
   question: string,
   sql: string,
   explanation: string,
+  queryResult: { rows: any[]; fields: any[] },
   sessionId?: string
 ): Promise<{ snapshot: QueryResultSnapshot; presentation: ReportPresentation }> {
-  const result = await executeQuery(sql);
-  const snapshot = queryResultSnapshotSchema.parse({
-    rows: result.rows.slice(0, 100),
-    fields: result.fields,
-    totalRows: result.rows.length,
-    truncated: result.rows.length > 100,
-  });
+  const snapshot = buildSnapshotFromQueryResult(queryResult.rows, queryResult.fields);
   const previousPresentation = await getPreviousPresentation(sessionId);
   const presentation = await generatePresentation(
     question,
@@ -53,4 +60,14 @@ export async function buildPresentationFromSQL(
     snapshot,
     presentation,
   };
+}
+
+export async function buildPresentationFromSQL(
+  question: string,
+  sql: string,
+  explanation: string,
+  sessionId?: string
+): Promise<{ snapshot: QueryResultSnapshot; presentation: ReportPresentation }> {
+  const result = await executeQuery(sql);
+  return buildPresentationFromQueryResult(question, sql, explanation, result, sessionId);
 }

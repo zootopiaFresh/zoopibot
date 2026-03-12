@@ -3,7 +3,7 @@ import { validateServiceToken, unauthorizedResponse, getUserIdBySlackId } from '
 import { logGenerationError } from '@/lib/error-logger';
 import { updateTableUsage, extractTableNames } from '@/lib/learning';
 import { prisma } from '@/lib/db';
-import { buildPresentationFromSQL } from '@/lib/reporting';
+import { buildPresentationFromQueryResult, buildPresentationFromSQL } from '@/lib/reporting';
 import { serializePresentation, serializeQueryResult } from '@/lib/presentation';
 import { generateSQLWithRecovery } from '@/lib/query-orchestrator';
 import { z } from 'zod';
@@ -69,11 +69,12 @@ export async function POST(req: NextRequest) {
     }
 
     // SQL 생성
-    const { result } = await generateSQLWithRecovery({
+    const { result, validatedExecution } = await generateSQLWithRecovery({
       question,
       history,
       userId,
       sessionId: activeSessionId,
+      validateFinalSql: execute,
     });
     let presentation;
     let resultSnapshot;
@@ -107,9 +108,17 @@ export async function POST(req: NextRequest) {
     // SQL 실행 (옵션)
     let data: any[] | undefined;
     let columns: any[] | undefined;
-    if (execute && result.sql) {
+    if (execute && result.sql && result.validated !== false) {
       try {
-        const report = await buildPresentationFromSQL(question, result.sql, result.explanation, activeSessionId);
+        const report = validatedExecution
+          ? await buildPresentationFromQueryResult(
+              question,
+              result.sql,
+              result.explanation,
+              validatedExecution,
+              activeSessionId
+            )
+          : await buildPresentationFromSQL(question, result.sql, result.explanation, activeSessionId);
         presentation = report.presentation;
         resultSnapshot = report.snapshot;
         data = report.snapshot.rows;
@@ -154,6 +163,10 @@ ${JSON.stringify(data.slice(0, 20), null, 2)}`;
     return NextResponse.json({
       sql: result.sql,
       explanation: result.explanation,
+      validated: result.validated ?? false,
+      validationError: result.validationError || null,
+      validationMode: result.validationMode || 'none',
+      validationAttempts: result.validationAttempts ?? 0,
       data,
       columns,
       presentation,

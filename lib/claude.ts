@@ -65,6 +65,10 @@ export interface SQLResponse {
   needsData?: boolean;
   dataQuery?: string;
   parseError?: boolean;  // JSON 파싱 실패 플래그
+  validated?: boolean;
+  validationMode?: 'none' | 'data-query' | 'final-sql';
+  validationError?: string;
+  validationAttempts?: number;
   usage: { input: number; output: number };
 }
 
@@ -209,6 +213,8 @@ ${stylePrompt}${contextPrompt}${feedbackPrompt}${frequentTablesPrompt}
 - 예: "현재 회원이 몇 명이야?", "가장 많이 팔린 상품은?", "특정 값이 있는지 확인" 등
 - needsData를 true로 설정하고, dataQuery에 확인용 SQL을 작성하세요.
 - 단순 쿼리 작성 요청이면 needsData는 false입니다.
+- 실제 조회 결과가 아직 없는 상태에서는 explanation에 회원 수, 주문 수, 금액 같은 확정 수치를 쓰지 마세요.
+- 데이터가 없으면 "측정 기준"과 "조회 방법"만 설명하고, 숫자는 SQL 실행 결과가 확인된 뒤에만 말하세요.
 
 **스키마 사용 규칙**:
 - 아래에 제공되는 스키마는 현재 질문과 관련성이 높은 실제 스키마 일부입니다.
