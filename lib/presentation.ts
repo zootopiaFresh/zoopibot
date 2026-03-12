@@ -91,6 +91,36 @@ export type ReportBlock = z.infer<typeof reportBlockSchema>;
 export type ReportPresentation = z.infer<typeof reportPresentationSchema>;
 export type QueryResultSnapshot = z.infer<typeof queryResultSnapshotSchema>;
 
+const chartRequestPatterns = [
+  /차트/,
+  /그래프/,
+  /시각화/,
+  /추이/,
+  /\bchart\b/i,
+  /\bgraph\b/i,
+  /\bplot\b/i,
+  /\bvisualization\b/i,
+  /\bvisualize\b/i,
+  /\btrend\b/i,
+];
+
+const chartRejectionPatterns = [
+  /차트\s*없이/,
+  /차트\s*말고/,
+  /그래프\s*없이/,
+  /그래프\s*말고/,
+  /시각화\s*없이/,
+  /시각화\s*말고/,
+  /표로만/,
+  /표만/,
+  /표로\s*보여/,
+  /표로\s*정리/,
+  /표\s*형태/,
+  /텍스트로만/,
+  /\bwithout\s+charts?\b/i,
+  /\btable\s+only\b/i,
+];
+
 const directFieldLabelMap: Record<string, string> = {
   period: '기간',
   value: '값',
@@ -237,6 +267,16 @@ function fieldLooksLikeTime(fieldName: string) {
   return /(date|day|week|month|year|time|at|period)$/i.test(fieldName);
 }
 
+export function questionExplicitlyRequestsChart(question: string) {
+  const normalized = question.trim();
+  if (!normalized) return false;
+  if (chartRejectionPatterns.some((pattern) => pattern.test(normalized))) {
+    return false;
+  }
+
+  return chartRequestPatterns.some((pattern) => pattern.test(normalized));
+}
+
 function buildTableBlock(snapshot: QueryResultSnapshot, title?: string): ReportBlock {
   return {
     type: 'table',
@@ -287,8 +327,10 @@ function buildChartSpec(
 export function buildFallbackPresentation(
   question: string,
   explanation: string,
-  snapshot: QueryResultSnapshot
+  snapshot: QueryResultSnapshot,
+  options?: { allowCharts?: boolean }
 ): ReportPresentation {
+  const allowCharts = options?.allowCharts ?? questionExplicitlyRequestsChart(question);
   const title = question.length > 40 ? `${question.slice(0, 40)}...` : question;
   const rows = snapshot.rows;
   const fields = snapshot.fields;
@@ -332,7 +374,13 @@ export function buildFallbackPresentation(
         format: guessFormat(field.name, rows[0][field.name]),
       })),
     });
-  } else if (numericFields.length === 1 && dimensionFields.length >= 1 && rows.length >= 2 && rows.length <= 20) {
+  } else if (
+    allowCharts &&
+    numericFields.length === 1 &&
+    dimensionFields.length >= 1 &&
+    rows.length >= 2 &&
+    rows.length <= 20
+  ) {
     const xField = dimensionFields[0];
     const yField = numericFields[0];
     const identifierHeavy = fieldLooksLikeIdentifier(xField.name) || rows.some((row) => {

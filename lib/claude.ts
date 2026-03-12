@@ -7,6 +7,7 @@ import { runAI, runClaudeCLI } from './ai-runtime';
 import {
   buildFallbackPresentation,
   extractJsonObject,
+  questionExplicitlyRequestsChart,
   type QueryResultSnapshot,
   type ReportBlock,
   reportPresentationSchema,
@@ -282,6 +283,7 @@ function sanitizePresentation(
   explanation: string,
   question: string
 ): ReportPresentation {
+  const allowCharts = questionExplicitlyRequestsChart(question);
   const allowedFields = new Set(snapshot.fields.map((field) => field.name));
   const normalizeDisplayLabel = (label: string | undefined, field: string) => {
     if (!label || label.trim() === '' || label.trim() === field || !/[가-힣]/.test(label)) {
@@ -323,6 +325,9 @@ function sanitizePresentation(
     }
 
     if (block.type === 'vega-lite') {
+      if (!allowCharts) {
+        continue;
+      }
       const spec = JSON.parse(JSON.stringify(block.spec));
       delete spec.data;
       delete spec.datasets;
@@ -349,7 +354,7 @@ function sanitizePresentation(
   const limitedBlocks = blocks.slice(0, 6);
 
   if (limitedBlocks.length === 0) {
-    return buildFallbackPresentation(question, explanation, snapshot);
+    return buildFallbackPresentation(question, explanation, snapshot, { allowCharts });
   }
 
   return {
@@ -398,14 +403,25 @@ function summarizeBlockShape(block: ReportBlock) {
   }
 }
 
-function buildPreviousPresentationPrompt(previousPresentation?: ReportPresentation) {
+function buildPreviousPresentationPrompt(
+  previousPresentation?: ReportPresentation,
+  allowCharts = true
+) {
   if (!previousPresentation) {
+    return '';
+  }
+
+  const previousBlocks = allowCharts
+    ? previousPresentation.blocks
+    : previousPresentation.blocks.filter((block) => block.type !== 'vega-lite');
+
+  if (previousBlocks.length === 0) {
     return '';
   }
 
   const compactLayout = {
     title: previousPresentation.title,
-    blocks: previousPresentation.blocks.map(summarizeBlockShape),
+    blocks: previousBlocks.map(summarizeBlockShape),
   };
 
   return `
@@ -425,33 +441,66 @@ export async function generatePresentation(
   sessionId?: string,
   previousPresentation?: ReportPresentation
 ): Promise<ReportPresentation> {
+  const allowCharts = questionExplicitlyRequestsChart(question);
+
   if (snapshot.rows.length === 0) {
-    return buildFallbackPresentation(question, explanation, snapshot);
+    return buildFallbackPresentation(question, explanation, snapshot, { allowCharts });
   }
 
   const previewRows = snapshot.rows.slice(0, 20);
-  const previousPresentationPrompt = buildPreviousPresentationPrompt(previousPresentation);
-  const prompt = `당신은 BI 리포트 편집자입니다.
-질문과 SQL 결과를 보고 사람이 이해하기 쉬운 블록형 응답 계획 JSON만 반환하세요.
-
-허용 블록:
+  const previousPresentationPrompt = buildPreviousPresentationPrompt(previousPresentation, allowCharts);
+  const allowedBlocksPrompt = allowCharts
+    ? `허용 블록:
 - narrative: 사람이 읽기 쉬운 한국어 설명
 - callout: 상태/주의 안내
 - metric-row: 단일 행 결과의 핵심 수치
 - table: 상세 목록 또는 기본 표
-- vega-lite: 시계열/카테고리 집계 차트
+- vega-lite: 시계열/카테고리 집계 차트`
+    : `허용 블록:
+- narrative: 사람이 읽기 쉬운 한국어 설명
+- callout: 상태/주의 안내
+- metric-row: 단일 행 결과의 핵심 수치
+- table: 상세 목록 또는 기본 표
 
-중요 규칙:
+금지 블록:
+- vega-lite: 사용자가 차트/그래프/시각화를 직접 요청하지 않았으므로 이번 응답에서는 절대 사용하지 마세요.`;
+  const chartRulePrompt = allowCharts
+    ? `- 사용자가 차트/그래프/시각화를 요청했을 때만 vega-lite를 사용하세요.
 - 상세 레코드 목록, 사용자 목록, 주문 목록, 식별자(ID/이메일/전화번호/이름) 중심 데이터는 차트 금지, table을 우선 사용하세요.
 - 기간별 집계는 line 또는 area 계열 spec을 우선 사용하세요.
-- 카테고리별 집계는 bar 계열 spec을 우선 사용하세요.
+- 카테고리별 집계는 bar 계열 spec을 우선 사용하세요.`
+    : `- 사용자가 차트/그래프/시각화를 직접 요청하지 않았으므로 vega-lite 블록은 절대 사용하지 마세요.
+- 상세 레코드 목록, 사용자 목록, 주문 목록, 식별자(ID/이메일/전화번호/이름) 중심 데이터는 table을 우선 사용하세요.`;
+  const bodyStructurePrompt = allowCharts
+    ? '- 본문은 가능하면 "설명 1개 + 차트/표 + 필요한 주의사항" 구조로 정리하세요.'
+    : '- 본문은 가능하면 "설명 1개 + 표 + 필요한 주의사항" 구조로 정리하세요.';
+  const responseExample = allowCharts
+    ? `"blocks": [
+    { "type": "narrative", "title": "요약", "body": "..." },
+    { "type": "metric-row", "title": "핵심 지표", "items": [{ "label": "활성 구독자", "field": "active_users", "format": "number" }] },
+    { "type": "vega-lite", "title": "추이", "description": "...", "spec": { "$schema": "https://vega.github.io/schema/vega-lite/v5.json", "width": "container", "height": 320, "mark": { "type": "line", "point": true }, "encoding": { "x": { "field": "period", "type": "temporal", "title": "기간" }, "y": { "field": "value", "type": "quantitative", "title": "값" }, "tooltip": [{ "field": "period", "type": "temporal" }, { "field": "value", "type": "quantitative" }] } } },
+    { "type": "table", "title": "상세 목록", "columns": [{ "key": "user_id", "label": "사용자 ID", "format": "text" }], "maxRows": 20 }
+  ]`
+    : `"blocks": [
+    { "type": "narrative", "title": "요약", "body": "..." },
+    { "type": "metric-row", "title": "핵심 지표", "items": [{ "label": "활성 구독자", "field": "active_users", "format": "number" }] },
+    { "type": "table", "title": "상세 목록", "columns": [{ "key": "user_id", "label": "사용자 ID", "format": "text" }], "maxRows": 20 }
+  ]`;
+  const prompt = `당신은 BI 리포트 편집자입니다.
+질문과 SQL 결과를 보고 사람이 이해하기 쉬운 블록형 응답 계획 JSON만 반환하세요.
+
+${allowedBlocksPrompt}
+
+중요 규칙:
+- metric-row는 결과 자체가 이미 집계/KPI 형태인 경우에만 사용하세요. 임의로 합계/평균/최고/최저를 새로 계산해서 만들지 마세요.
+${chartRulePrompt}
 - 사용자가 보는 제목, 설명, KPI label, table columns.label, chart axis title, tooltip title은 가능한 한 자연스러운 한국어로 작성하세요.
 - field/key 값은 실제 결과 필드명을 유지하고, 사람이 읽는 label/title만 한글로 바꾸세요.
 - 해석이나 쿼리 설명 중 꼭 알아야 할 제약, 시간대, 제외 조건, 해석 주의점이 있으면 callout 블록으로 분리하세요.
 - 요약은 SQL 설명문처럼 쓰지 말고, 사람이 바로 이해할 수 있게 "무슨 결과인지 / 눈에 띄는 값이 무엇인지 / 해석시 주의점이 있는지" 순서의 설명문으로 작성하세요.
 - 요약은 2~4개의 짧은 문단으로 나누고, 문단 사이에는 빈 줄을 넣으세요.
 - 컬럼명만 나열하거나 'period 기준 value' 같은 축약 표현은 금지합니다.
-- 본문은 가능하면 "설명 1개 + 차트/표 + 필요한 주의사항" 구조로 정리하세요.
+${bodyStructurePrompt}
 - metric-row의 items는 실제 필드명을 field에 넣으세요.
 - table은 rows를 넣지 말고 columns와 maxRows만 정하세요. 프론트가 실제 rows를 주입합니다.
 - vega-lite spec에도 data를 넣지 마세요. 프론트가 data.values를 주입합니다.
@@ -464,12 +513,7 @@ export async function generatePresentation(
 {
   "version": "v1",
   "title": "짧은 제목",
-  "blocks": [
-    { "type": "narrative", "title": "요약", "body": "..." },
-    { "type": "metric-row", "title": "핵심 지표", "items": [{ "label": "활성 구독자", "field": "active_users", "format": "number" }] },
-    { "type": "vega-lite", "title": "추이", "description": "...", "spec": { "$schema": "https://vega.github.io/schema/vega-lite/v5.json", "width": "container", "height": 320, "mark": { "type": "line", "point": true }, "encoding": { "x": { "field": "period", "type": "temporal", "title": "기간" }, "y": { "field": "value", "type": "quantitative", "title": "값" }, "tooltip": [{ "field": "period", "type": "temporal" }, { "field": "value", "type": "quantitative" }] } } },
-    { "type": "table", "title": "상세 목록", "columns": [{ "key": "user_id", "label": "사용자 ID", "format": "text" }], "maxRows": 20 }
-  ]
+  ${responseExample}
 }
 
 사용자 질문:
@@ -530,6 +574,6 @@ ${JSON.stringify(previewRows, null, 2)}`;
       },
     });
 
-    return buildFallbackPresentation(question, explanation, snapshot);
+    return buildFallbackPresentation(question, explanation, snapshot, { allowCharts });
   }
 }

@@ -96,40 +96,6 @@ function resolveChartConfig(spec: Record<string, any>) {
   };
 }
 
-function buildAutoMetrics(snapshot: QueryResultSnapshot) {
-  const numericFields = snapshot.fields.filter((field) =>
-    snapshot.rows.every((row) => {
-      const value = row[field.name];
-      return value === null || value === undefined || typeof value === 'number';
-    })
-  );
-
-  if (numericFields.length !== 1 || snapshot.rows.length < 2) {
-    return [];
-  }
-
-  const valueField = numericFields[0].name;
-  const values = snapshot.rows
-    .map((row) => row[valueField])
-    .filter((value): value is number => typeof value === 'number');
-
-  if (values.length === 0) {
-    return [];
-  }
-
-  const total = values.reduce((sum, value) => sum + value, 0);
-  const average = total / values.length;
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-
-  return [
-    { label: '합계', value: total, format: 'number' as const, tone: 'default' as const },
-    { label: '평균', value: average, format: 'number' as const, tone: 'default' as const },
-    { label: '최고', value: max, format: 'number' as const, tone: 'success' as const },
-    { label: '최저', value: min, format: 'number' as const, tone: 'warning' as const },
-  ];
-}
-
 function ChartBlock({
   spec,
   snapshot,
@@ -226,7 +192,6 @@ export function ReportRenderer({
   const chartBlocks = presentation.blocks.filter((block) => block.type === 'vega-lite');
   const tableBlocks = presentation.blocks.filter((block) => block.type === 'table');
   const noteBlocks = presentation.blocks.filter((block) => block.type === 'callout');
-  const autoMetrics = metricBlocks.length === 0 ? buildAutoMetrics(snapshot) : [];
 
   const handleCopyCsv = async () => {
     await navigator.clipboard.writeText(buildCsv(snapshot));
@@ -268,40 +233,6 @@ export function ReportRenderer({
                 </div>
               );
             })}
-          </div>
-        ) : autoMetrics.length > 0 ? (
-          <div className="grid gap-3 px-5 pb-3 sm:grid-cols-2 xl:grid-cols-4">
-            {autoMetrics.map((item) => (
-              <div
-                key={item.label}
-                className={`rounded-lg p-3 text-center ${
-                  item.tone === 'success'
-                    ? 'bg-emerald-50'
-                    : item.tone === 'warning'
-                      ? 'bg-orange-50'
-                      : 'bg-[#f9fafb]'
-                }`}
-              >
-                <p className={`text-xs ${
-                  item.tone === 'success'
-                    ? 'text-emerald-600'
-                    : item.tone === 'warning'
-                      ? 'text-orange-600'
-                      : 'text-[#6b7280]'
-                }`}>
-                  {item.label}
-                </p>
-                <p className={`mt-0.5 text-lg font-semibold ${
-                  item.tone === 'success'
-                    ? 'text-emerald-700'
-                    : item.tone === 'warning'
-                      ? 'text-orange-700'
-                      : 'text-[#111827]'
-                }`}>
-                  {formatValue(item.value, item.format)}
-                </p>
-              </div>
-            ))}
           </div>
         ) : null}
 
