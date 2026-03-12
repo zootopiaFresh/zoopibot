@@ -31,7 +31,7 @@ const narrativeBlockSchema = z.object({
 
 const calloutBlockSchema = z.object({
   type: z.literal('callout'),
-  tone: z.enum(['info', 'success', 'warning']),
+  tone: z.enum(['info', 'success', 'warning']).default('info'),
   title: z.string().min(1).max(80).optional(),
   body: z.string().min(1).max(1000),
 });

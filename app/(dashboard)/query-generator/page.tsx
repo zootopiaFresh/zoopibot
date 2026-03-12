@@ -136,6 +136,27 @@ function isSqlOnlyRequest(input: string) {
   return /sql만|쿼리만|문장만|실행하지\s*마|실행 없이|only sql|sql only/i.test(input);
 }
 
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text.trim()) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const normalized = text.trim();
+    if (normalized.startsWith('<')) {
+      const titleMatch = normalized.match(/<title>(.*?)<\/title>/i);
+      const headingMatch = normalized.match(/<h1[^>]*>(.*?)<\/h1>/i);
+      const pageLabel = titleMatch?.[1] ?? headingMatch?.[1] ?? `HTTP ${response.status}`;
+      throw new Error(`서버가 JSON 대신 HTML 오류 페이지를 반환했습니다. (${pageLabel})`);
+    }
+
+    throw new Error(`서버 응답을 해석하지 못했습니다. (HTTP ${response.status})`);
+  }
+}
+
 function buildVisualization(result: QueryResult) {
   const rows = result.rows;
   const fields = result.fields;
@@ -439,7 +460,7 @@ export default function QueryGeneratorPage() {
   const fetchSessions = async () => {
     try {
       const response = await fetch('/api/chat/sessions');
-      const data = await response.json();
+      const data = await parseJsonResponse<{ sessions?: ChatSession[]; error?: string }>(response);
 
       if (data.sessions) {
         setSessions(data.sessions);
@@ -452,7 +473,7 @@ export default function QueryGeneratorPage() {
   const loadSession = async (sessionId: string) => {
     try {
       const response = await fetch(`/api/chat/sessions/${sessionId}`);
-      const data = await response.json();
+      const data = await parseJsonResponse<{ session?: { messages: Message[] } }>(response);
 
       if (!data.session) {
         return;
@@ -503,7 +524,7 @@ export default function QueryGeneratorPage() {
 
       if (!sessionId) {
         const sessionResponse = await fetch('/api/chat/sessions', { method: 'POST' });
-        const sessionData = await sessionResponse.json();
+        const sessionData = await parseJsonResponse<{ session?: { id?: string }; error?: string }>(sessionResponse);
 
         if (!sessionResponse.ok || !sessionData.session?.id) {
           throw new Error(sessionData.error || '새 대화를 만들지 못했습니다.');
@@ -534,7 +555,11 @@ export default function QueryGeneratorPage() {
           autoExecute: !isSqlOnlyRequest(userContent),
         }),
       });
-      const data = await response.json();
+      const data = await parseJsonResponse<{
+        userMessage: Message;
+        assistantMessage: Message;
+        error?: string;
+      }>(response);
 
       if (!response.ok) {
         throw new Error(data.error || '오류가 발생했습니다.');
@@ -588,7 +613,15 @@ export default function QueryGeneratorPage() {
           sessionId: currentSessionId,
         }),
       });
-      const data = await response.json();
+      const data = await parseJsonResponse<{
+        error?: string;
+        presentation?: ReportPresentation | null;
+        resultSnapshot?: QueryResultSnapshot | null;
+        rows?: Record<string, unknown>[];
+        fields?: { name: string }[];
+        totalRows?: number;
+        truncated?: boolean;
+      }>(response);
 
       if (!response.ok) {
         setQueryResults((previous) => ({

@@ -478,12 +478,14 @@ export async function generatePresentation(
   const responseExample = allowCharts
     ? `"blocks": [
     { "type": "narrative", "title": "요약", "body": "..." },
+    { "type": "callout", "tone": "info", "title": "주의", "body": "집계 기준에서 취소 주문은 제외했습니다." },
     { "type": "metric-row", "title": "핵심 지표", "items": [{ "label": "활성 구독자", "field": "active_users", "format": "number" }] },
     { "type": "vega-lite", "title": "추이", "description": "...", "spec": { "$schema": "https://vega.github.io/schema/vega-lite/v5.json", "width": "container", "height": 320, "mark": { "type": "line", "point": true }, "encoding": { "x": { "field": "period", "type": "temporal", "title": "기간" }, "y": { "field": "value", "type": "quantitative", "title": "값" }, "tooltip": [{ "field": "period", "type": "temporal" }, { "field": "value", "type": "quantitative" }] } } },
     { "type": "table", "title": "상세 목록", "columns": [{ "key": "user_id", "label": "사용자 ID", "format": "text" }], "maxRows": 20 }
   ]`
     : `"blocks": [
     { "type": "narrative", "title": "요약", "body": "..." },
+    { "type": "callout", "tone": "info", "title": "주의", "body": "집계 기준에서 취소 주문은 제외했습니다." },
     { "type": "metric-row", "title": "핵심 지표", "items": [{ "label": "활성 구독자", "field": "active_users", "format": "number" }] },
     { "type": "table", "title": "상세 목록", "columns": [{ "key": "user_id", "label": "사용자 ID", "format": "text" }], "maxRows": 20 }
   ]`;
