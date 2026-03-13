@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { logGenerationError } from '@/lib/error-logger';
-import { parseStoredPresentation, parseStoredQueryResult, serializePresentation, serializeQueryResult } from '@/lib/presentation';
-import { generateSQLWithRecovery } from '@/lib/query-orchestrator';
-import { buildPresentationFromQueryResult, buildPresentationFromSQL } from '@/lib/reporting';
+import { CHAT_MESSAGE_STATUS, serializeChatMessage } from '@/lib/chat-message';
+import { emitChatSessionEvent } from '@/lib/chat-events';
+import { runChatMessageGeneration } from '@/lib/chat-runner';
 import { z } from 'zod';
 
 const requestSchema = z.object({
@@ -47,95 +46,78 @@ export async function POST(
       data: {
         role: 'user',
         content,
-        sessionId: params.id
+        sessionId: params.id,
+      }
+    });
+
+    const assistantMessage = await prisma.chatMessage.create({
+      data: {
+        role: 'assistant',
+        content: [
+          '[run] 질문 접수 - 요청을 등록했습니다.',
+          '[todo] 관련 스키마 탐색',
+          '[todo] SQL 검증 및 결과 확인',
+          '[todo] 리포트 정리',
+        ].join('\n'),
+        sessionId: params.id,
+        status: CHAT_MESSAGE_STATUS.PENDING,
       }
     });
 
     // 대화 히스토리 준비
-    const history = chatSession.messages.map((msg: { role: string; content: string; sql: string | null }) => ({
-      role: msg.role as 'user' | 'assistant',
-      content: msg.content,
-      sql: msg.sql || undefined
-    }));
+    const history = [
+      ...chatSession.messages.map((msg: { role: string; content: string; sql: string | null }) => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        sql: msg.sql || undefined
+      })),
+      {
+        role: 'user' as const,
+        content,
+      },
+    ];
 
     const sessionId = params.id;
-    const { result, validatedExecution } = await generateSQLWithRecovery({
-      question: content,
-      history,
-      userId,
-      sessionId,
-      validateFinalSql: autoExecute,
-    });
-    let presentation = null;
-    let resultSnapshot = null;
-
-    if (autoExecute && result.sql && result.validated !== false) {
-      try {
-        const report = validatedExecution
-          ? await buildPresentationFromQueryResult(
-              content,
-              result.sql,
-              result.explanation,
-              validatedExecution,
-              sessionId
-            )
-          : await buildPresentationFromSQL(content, result.sql, result.explanation, sessionId);
-        presentation = report.presentation;
-        resultSnapshot = report.snapshot;
-      } catch (queryError: any) {
-        console.error('[Chat API] Report build failed:', queryError.message);
-        logGenerationError({
-          errorType: 'db_query_error',
-          errorMessage: `자동 실행 실패: ${queryError.message}`,
-          userId,
-          sessionId,
-          prompt: content,
-          metadata: { sql: result.sql },
-        });
-      }
-    }
-
-    // 어시스턴트 메시지 저장
-    const assistantMessage = await prisma.chatMessage.create({
-      data: {
-        role: 'assistant',
-        content: result.explanation || '쿼리를 생성했습니다.',
-        sql: result.sql || null,
-        presentation: serializePresentation(presentation),
-        resultSnapshot: serializeQueryResult(resultSnapshot),
-        sessionId: params.id
-      }
-    });
 
     // 첫 메시지인 경우 세션 제목 업데이트
     if (chatSession.messages.length === 0) {
       const title = content.length > 30 ? content.substring(0, 30) + '...' : content;
       await prisma.chatSession.update({
         where: { id: params.id },
-        data: { title }
+        data: { title, updatedAt: new Date() }
+      });
+    } else {
+      await prisma.chatSession.update({
+        where: { id: params.id },
+        data: { updatedAt: new Date() }
       });
     }
 
-    // 세션 updatedAt 갱신
-    await prisma.chatSession.update({
-      where: { id: params.id },
-      data: { updatedAt: new Date() }
+    emitChatSessionEvent({
+      type: 'message.created',
+      sessionId,
+      message: serializeChatMessage(userMessage),
+    });
+    emitChatSessionEvent({
+      type: 'message.created',
+      sessionId,
+      message: serializeChatMessage(assistantMessage),
+    });
+
+    void runChatMessageGeneration({
+      assistantMessageId: assistantMessage.id,
+      autoExecute,
+      history,
+      question: content,
+      sessionId,
+      userId,
+    }).catch((runnerError) => {
+      console.error('[Chat API] Background runner failed:', runnerError);
     });
 
     return NextResponse.json({
-      userMessage,
-      assistantMessage: {
-        ...assistantMessage,
-        sql: result.sql,
-        explanation: result.explanation,
-        parseError: result.parseError || false,
-        validated: result.validated ?? false,
-        validationError: result.validationError || null,
-        validationMode: result.validationMode || 'none',
-        validationAttempts: result.validationAttempts ?? 0,
-        presentation: parseStoredPresentation(assistantMessage.presentation),
-        resultSnapshot: parseStoredQueryResult(assistantMessage.resultSnapshot),
-      }
+      userMessage: serializeChatMessage(userMessage),
+      assistantMessage: serializeChatMessage(assistantMessage),
     });
   } catch (error) {
     console.error('Message create error:', error);

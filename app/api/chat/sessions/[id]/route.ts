@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { parseStoredPresentation, parseStoredQueryResult } from '@/lib/presentation';
+import { serializeChatMessage } from '@/lib/chat-message';
 
 // GET: 세션 상세 (메시지 포함)
 export async function GET(
@@ -32,11 +32,7 @@ export async function GET(
     return NextResponse.json({
       session: {
         ...chatSession,
-        messages: chatSession.messages.map((message) => ({
-          ...message,
-          presentation: parseStoredPresentation(message.presentation),
-          resultSnapshot: parseStoredQueryResult(message.resultSnapshot),
-        })),
+        messages: chatSession.messages.map((message) => serializeChatMessage(message)),
       },
     });
   } catch (error) {

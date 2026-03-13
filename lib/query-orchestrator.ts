@@ -6,7 +6,7 @@ import {
   type ResolvedSchemaContext,
 } from './schema-explorer';
 
-interface ChatHistoryLike {
+export interface ChatHistoryLike {
   role: 'user' | 'assistant';
   content: string;
   sql?: string;

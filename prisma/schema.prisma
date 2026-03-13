@@ -169,13 +169,23 @@ model ChatMessage {
   sql       String?  // 생성된 SQL (assistant만)
   presentation String? // AI가 결정한 렌더 블록 JSON
   resultSnapshot String? // 실행 결과 스냅샷 JSON
+  status    String   @default("completed") // "pending" | "running" | "completed" | "failed"
+  errorMessage String?
+  parseError Boolean @default(false)
+  validated Boolean?
+  validationMode String?
+  validationError String?
+  validationAttempts Int?
 
   sessionId String
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+  startedAt DateTime?
+  completedAt DateTime?
 
   @@index([sessionId])
+  @@index([sessionId, status])
 }
 
 // ==================== 스키마 프롬프트 관리 ====================

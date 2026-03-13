@@ -44,10 +44,18 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   sql?: string | null;
+  status?: 'pending' | 'running' | 'completed' | 'failed';
+  errorMessage?: string | null;
   parseError?: boolean;
+  validated?: boolean | null;
+  validationMode?: string | null;
+  validationError?: string | null;
+  validationAttempts?: number | null;
   presentation?: ReportPresentation | null;
   resultSnapshot?: QueryResultSnapshot | null;
   createdAt?: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
 }
 
 interface ChatSession {
@@ -105,6 +113,33 @@ interface ChartPoint {
   value: number;
 }
 
+interface ChatSessionEventPayload {
+  type: 'message.created' | 'message.updated' | 'message.completed' | 'message.failed';
+  sessionId: string;
+  message: Message;
+}
+
+interface ProgressLogItem {
+  state: 'done' | 'run' | 'todo' | 'fail';
+  text: string;
+}
+
+function AnimatedProgressText({ text }: { text: string }) {
+  return (
+    <span className="live-progress-line" aria-live="polite">
+      {Array.from(text).map((character, index) => (
+        <span
+          key={`${text}-${index}`}
+          className="live-progress-char"
+          style={{ animationDelay: `${index * 18}ms` }}
+        >
+          {character === ' ' ? '\u00A0' : character}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function toDisplayText(value: unknown) {
   if (value === null || value === undefined) return 'NULL';
   if (typeof value === 'number') {
@@ -134,6 +169,76 @@ function isDateLike(value: unknown) {
 
 function isSqlOnlyRequest(input: string) {
   return /sql만|쿼리만|문장만|실행하지\s*마|실행 없이|only sql|sql only/i.test(input);
+}
+
+function normalizeMessage(message: Message): Message {
+  return {
+    ...message,
+    status: message.status || 'completed',
+    errorMessage: message.errorMessage || null,
+    parseError: message.parseError || false,
+    validated: message.validated ?? null,
+    validationMode: message.validationMode || null,
+    validationError: message.validationError || null,
+    validationAttempts: message.validationAttempts ?? null,
+  };
+}
+
+function isActiveMessage(message: Message) {
+  return message.role === 'assistant' && (message.status === 'pending' || message.status === 'running');
+}
+
+function parseProgressLog(message: Message): ProgressLogItem[] {
+  const items = message.content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const matched = line.match(/^\[(done|run|todo|fail)\]\s+(.*)$/);
+      if (!matched) {
+        return null;
+      }
+
+      return {
+        state: matched[1] as ProgressLogItem['state'],
+        text: matched[2],
+      };
+    })
+    .filter((item): item is ProgressLogItem => item !== null);
+
+  if (items.length > 0) {
+    return items;
+  }
+
+  return [
+    {
+      state: message.status === 'pending' ? 'run' : 'todo',
+      text: message.status === 'pending'
+        ? '질문을 접수했습니다.'
+        : '응답 생성을 준비하고 있습니다.',
+    },
+    { state: 'todo', text: '관련 스키마 탐색' },
+    { state: 'todo', text: 'SQL 검증 및 결과 확인' },
+    { state: 'todo', text: '리포트 정리' },
+  ];
+}
+
+function getElapsedText(message: Message, nowMs: number) {
+  const baseTime = message.startedAt || message.createdAt;
+  if (!baseTime) {
+    return null;
+  }
+
+  const elapsedMs = Math.max(0, nowMs - new Date(baseTime).getTime());
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+
+  if (elapsedSeconds < 60) {
+    return `${elapsedSeconds}초 경과`;
+  }
+
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return `${minutes}분 ${seconds}초 경과`;
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
@@ -408,10 +513,12 @@ export default function QueryGeneratorPage() {
     Record<string, QueryResult | QueryResultError>
   >({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [progressNow, setProgressNow] = useState(() => Date.now());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isSubmitting = useRef(false);
   const wasDesktop = useRef(false);
+  const hasActiveAssistant = messages.some((message) => isActiveMessage(message));
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1024px)');
@@ -457,6 +564,98 @@ export default function QueryGeneratorPage() {
     textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
   }, [input]);
 
+  useEffect(() => {
+    if (!hasActiveAssistant) {
+      return;
+    }
+
+    setProgressNow(Date.now());
+    const intervalId = window.setInterval(() => {
+      setProgressNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [hasActiveAssistant]);
+
+  useEffect(() => {
+    if (!currentSessionId) {
+      return;
+    }
+
+    const eventSource = new EventSource(`/api/chat/sessions/${currentSessionId}/events`);
+    const handleEvent = (event: Event) => {
+      const messageEvent = event as MessageEvent<string>;
+
+      try {
+        const payload = JSON.parse(messageEvent.data) as ChatSessionEventPayload;
+        const nextMessage = normalizeMessage(payload.message);
+
+        setMessages((previous) => {
+          const existingIndex = previous.findIndex((message) => message.id === nextMessage.id);
+          if (existingIndex === -1) {
+            return [...previous, nextMessage].sort((left, right) => {
+              const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+              const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+              return leftTime - rightTime;
+            });
+          }
+
+          return previous.map((message) =>
+            message.id === nextMessage.id ? { ...message, ...nextMessage } : message
+          );
+        });
+
+        if (
+          payload.type === 'message.created' ||
+          payload.type === 'message.completed' ||
+          payload.type === 'message.failed'
+        ) {
+          void fetchSessions();
+        }
+      } catch (error) {
+        console.error('Failed to parse chat event:', error);
+      }
+    };
+
+    eventSource.addEventListener('message.created', handleEvent);
+    eventSource.addEventListener('message.updated', handleEvent);
+    eventSource.addEventListener('message.completed', handleEvent);
+    eventSource.addEventListener('message.failed', handleEvent);
+
+    return () => {
+      eventSource.removeEventListener('message.created', handleEvent);
+      eventSource.removeEventListener('message.updated', handleEvent);
+      eventSource.removeEventListener('message.completed', handleEvent);
+      eventSource.removeEventListener('message.failed', handleEvent);
+      eventSource.close();
+    };
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    if (!currentSessionId || !hasActiveAssistant) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void (async () => {
+        try {
+          const response = await fetch(`/api/chat/sessions/${currentSessionId}`);
+          const data = await parseJsonResponse<{ session?: { messages: Message[] } }>(response);
+
+          if (!response.ok || !data.session) {
+            return;
+          }
+
+          setMessages(data.session.messages.map((message) => normalizeMessage(message)));
+        } catch (error) {
+          console.error('Failed to refresh active session:', error);
+        }
+      })();
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [currentSessionId, hasActiveAssistant]);
+
   const fetchSessions = async () => {
     try {
       const response = await fetch('/api/chat/sessions');
@@ -480,7 +679,7 @@ export default function QueryGeneratorPage() {
       }
 
       setCurrentSessionId(sessionId);
-      setMessages(data.session.messages);
+      setMessages(data.session.messages.map((message) => normalizeMessage(message)));
       setQueryResults({});
 
       if (!isDesktop) {
@@ -510,7 +709,7 @@ export default function QueryGeneratorPage() {
   };
 
   const submitMessage = async () => {
-    if (!input.trim() || loading || isSubmitting.current) {
+    if (!input.trim() || loading || isSubmitting.current || hasActiveAssistant) {
       return;
     }
 
@@ -566,16 +765,36 @@ export default function QueryGeneratorPage() {
       }
 
       const assistantMessage: Message = {
-        ...data.assistantMessage,
+        ...normalizeMessage(data.assistantMessage),
         sql: data.assistantMessage.sql || null,
-        parseError: data.assistantMessage.parseError || false,
         presentation: data.assistantMessage.presentation || null,
         resultSnapshot: data.assistantMessage.resultSnapshot || null,
       };
 
       setMessages((previous) => {
-        const filtered = previous.filter((message) => message.id !== tempUserMessageId);
-        return [...filtered, data.userMessage, assistantMessage];
+        const nextMessages = previous.filter((message) => message.id !== tempUserMessageId);
+
+        for (const incomingMessage of [normalizeMessage(data.userMessage), assistantMessage]) {
+          const existingIndex = nextMessages.findIndex((message) => message.id === incomingMessage.id);
+
+          if (existingIndex === -1) {
+            nextMessages.push(incomingMessage);
+            continue;
+          }
+
+          nextMessages[existingIndex] = {
+            ...nextMessages[existingIndex],
+            ...incomingMessage,
+          };
+        }
+
+        nextMessages.sort((left, right) => {
+          const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+          const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+          return leftTime - rightTime;
+        });
+
+        return [...nextMessages];
       });
 
       fetchSessions();
@@ -587,6 +806,7 @@ export default function QueryGeneratorPage() {
           id: `error-${Date.now()}`,
           role: 'assistant',
           content: error instanceof Error ? error.message : '오류가 발생했습니다.',
+          status: 'failed',
         },
       ]);
     } finally {
@@ -1015,7 +1235,7 @@ export default function QueryGeneratorPage() {
                       </div>
 
                       <div className="min-w-0 flex-1 space-y-4">
-                        {message.sql ? (
+                        {message.sql && !isActiveMessage(message) ? (
                           <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
@@ -1066,7 +1286,71 @@ export default function QueryGeneratorPage() {
                           </div>
                         ) : null}
 
-                        {message.presentation && message.resultSnapshot ? (
+                        {isActiveMessage(message) ? (
+                          (() => {
+                            const progressItems = parseProgressLog(message);
+                            const currentItem = progressItems.find((item) => item.state === 'run');
+                            const currentIndex = Math.max(
+                              0,
+                              progressItems.findIndex((item) => item.state === 'run')
+                            );
+                            const elapsed = getElapsedText(message, progressNow);
+                            const currentText = currentItem?.text || '요청을 처리하고 있습니다.';
+
+                            return (
+                              <div className="max-w-[min(86%,620px)]">
+                                <div className="relative overflow-hidden rounded-full border border-[rgba(255,255,255,0.78)] bg-[linear-gradient(180deg,rgba(255,255,255,0.88)_0%,rgba(248,249,251,0.74)_100%)] px-4 py-3 shadow-[0_16px_36px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-xl">
+                                  <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,rgba(255,255,255,0.9)_18%,rgba(255,255,255,0.9)_82%,rgba(255,255,255,0)_100%)]" />
+                                  <div className="flex items-center gap-3">
+                                    <div className="inline-flex shrink-0 items-center gap-2">
+                                      <span className="h-2 w-2 animate-pulse rounded-full bg-[#111827]" />
+                                      <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#8b9099]">
+                                        Live
+                                      </span>
+                                    </div>
+
+                                    <div className="relative min-w-0 flex-1 overflow-hidden">
+                                      <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,rgba(251,251,252,0.86)_100%)]" />
+                                      <div className="overflow-hidden whitespace-nowrap text-[15px] font-medium tracking-[-0.02em] text-[#111827]">
+                                        <AnimatedProgressText key={currentText} text={currentText} />
+                                      </div>
+                                    </div>
+
+                                    <div className="shrink-0 text-[11px] tracking-[0.03em] text-[#a0a6af]">
+                                      {elapsed || 'now'}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="mt-3 flex items-center gap-2.5 px-1">
+                                  {progressItems.map((item, itemIndex) => (
+                                    <span
+                                      key={`${message.id}-progress-${itemIndex}`}
+                                      className={cn(
+                                        'h-[3px] rounded-full transition-all duration-500',
+                                        item.state === 'run' && 'w-9 bg-[#111827]',
+                                        item.state === 'done' && 'w-5 bg-[#9ca3af]',
+                                        item.state === 'todo' && 'w-5 bg-[#d7dbe1]',
+                                        item.state === 'fail' && 'w-9 bg-[#dc2626]',
+                                        itemIndex === currentIndex && item.state === 'run' && 'shadow-[0_0_0_5px_rgba(17,24,39,0.05)]'
+                                      )}
+                                    >
+                                      <span className="sr-only">{item.text}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()
+                        ) : null}
+
+                        {message.status === 'failed' && message.errorMessage ? (
+                          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            {message.errorMessage}
+                          </div>
+                        ) : null}
+
+                        {message.presentation && message.resultSnapshot && !isActiveMessage(message) ? (
                           <ReportRenderer
                             presentation={message.presentation}
                             snapshot={message.resultSnapshot}
@@ -1074,19 +1358,19 @@ export default function QueryGeneratorPage() {
                           />
                         ) : null}
 
-                        {message.sql && !message.presentation
+                        {message.sql && !message.presentation && !isActiveMessage(message)
                           ? renderQueryResult(message.id)
                           : null}
 
-                        {message.sql ? <SqlCard sql={message.sql} /> : null}
+                        {message.sql && !isActiveMessage(message) ? <SqlCard sql={message.sql} /> : null}
 
-                        {message.parseError ? (
+                        {message.parseError && !isActiveMessage(message) ? (
                           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                             SQL을 생성하지 못했습니다. 질문을 조금 더 구체적으로 다시 시도해주세요.
                           </div>
                         ) : null}
 
-                        {!message.presentation ? (
+                        {!message.presentation && !isActiveMessage(message) ? (
                           <div className="prose prose-neutral max-w-none text-[15px] leading-7 text-[#0d0d0d] prose-p:my-0 prose-p:leading-7 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-[#0d0d0d] prose-code:rounded prose-code:bg-[#f7f7f8] prose-code:px-1 prose-code:py-0.5 prose-code:text-[#0d0d0d] prose-code:before:content-none prose-code:after:content-none prose-pre:bg-transparent prose-pre:p-0 prose-table:border-collapse prose-th:border prose-th:border-[#e5e5e5] prose-th:bg-[#f7f7f8] prose-th:px-3 prose-th:py-2 prose-th:text-left prose-td:border prose-td:border-[#e5e5e5] prose-td:px-3 prose-td:py-2">
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
@@ -1099,16 +1383,18 @@ export default function QueryGeneratorPage() {
                           </div>
                         ) : null}
 
-                        <div className="flex items-center gap-2 border-t border-[#efefef] pt-2">
-                          <QuickFeedback
-                            sessionId={currentSessionId || undefined}
-                            messageId={message.id}
-                          />
-                          <FeedbackButton
-                            sessionId={currentSessionId || undefined}
-                            messageId={message.id}
-                          />
-                        </div>
+                        {!isActiveMessage(message) ? (
+                          <div className="flex items-center gap-2 border-t border-[#efefef] pt-2">
+                            <QuickFeedback
+                              sessionId={currentSessionId || undefined}
+                              messageId={message.id}
+                            />
+                            <FeedbackButton
+                              sessionId={currentSessionId || undefined}
+                              messageId={message.id}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   )}
@@ -1144,7 +1430,7 @@ export default function QueryGeneratorPage() {
                 onKeyDown={handleTextareaKeyDown}
                 placeholder="메시지를 입력하세요"
                 rows={1}
-                disabled={loading}
+                disabled={loading || hasActiveAssistant}
                 className="min-h-[88px] w-full resize-none bg-transparent px-4 pt-4 pb-14 text-[15px] tracking-tight text-[#0d0d0d] outline-none placeholder:text-[#8e8ea0] disabled:cursor-not-allowed"
               />
 
@@ -1171,10 +1457,10 @@ export default function QueryGeneratorPage() {
 
                 <button
                   type="submit"
-                  disabled={!input.trim() || loading}
+                  disabled={!input.trim() || loading || hasActiveAssistant}
                   className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-full text-white transition-all duration-200',
-                    input.trim() && !loading
+                    input.trim() && !loading && !hasActiveAssistant
                       ? 'bg-[#202123] hover:bg-[#171717]'
                       : 'bg-[#d1d5db] cursor-not-allowed'
                   )}
