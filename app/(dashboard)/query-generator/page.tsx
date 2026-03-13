@@ -518,6 +518,8 @@ export default function QueryGeneratorPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isSubmitting = useRef(false);
   const wasDesktop = useRef(false);
+  const previousSessionId = useRef<string | null>(null);
+  const previousLastMessageId = useRef<string | null>(null);
   const hasActiveAssistant = messages.some((message) => isActiveMessage(message));
 
   useEffect(() => {
@@ -549,11 +551,20 @@ export default function QueryGeneratorPage() {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: messages.length > 0 ? 'smooth' : 'auto',
-      block: 'end',
-    });
-  }, [messages, queryResults]);
+    const lastMessageId = messages.at(-1)?.id ?? null;
+    const sessionChanged = previousSessionId.current !== currentSessionId;
+    const lastMessageChanged = previousLastMessageId.current !== lastMessageId;
+
+    if ((sessionChanged && messages.length > 0) || lastMessageChanged) {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: sessionChanged ? 'auto' : 'smooth',
+        block: 'end',
+      });
+    }
+
+    previousSessionId.current = currentSessionId;
+    previousLastMessageId.current = lastMessageId;
+  }, [currentSessionId, messages]);
 
   useEffect(() => {
     if (!textareaRef.current) {
