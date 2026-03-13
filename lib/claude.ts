@@ -15,6 +15,10 @@ import {
   type ReportPresentation,
   toPreferredLabel,
 } from './presentation';
+import {
+  looksLikeStructuredSqlPayload,
+  parseStructuredSqlResponse,
+} from './structured-response';
 
 export { runAI, runClaudeCLI } from './ai-runtime';
 
@@ -243,10 +247,13 @@ ${schema ? `DB 스키마:\n${schema}\n\n` : ''}${conversationContext}${dataConte
 
   let parsed;
   let parseError = false;
-  try {
-    parsed = JSON.parse(extractJsonObject(result));
-  } catch (e) {
-    const errorMessage = (e as Error).message;
+  const structuredResponse = parseStructuredSqlResponse(result);
+
+  if (structuredResponse) {
+    parsed = structuredResponse.response;
+    parseError = false;
+  } else {
+    const errorMessage = '구조화된 JSON 응답을 찾지 못했습니다.';
     console.warn('[generateSQL] JSON 파싱 실패:', errorMessage);
     console.warn('[generateSQL] 원본 응답 (200자):', result.substring(0, 200));
     parseError = true;
@@ -269,6 +276,11 @@ ${schema ? `DB 스키마:\n${schema}\n\n` : ''}${conversationContext}${dataConte
       const explanation = result.replace(sqlBlockMatch[0], '').trim();
       parsed = { sql: extractedSql, explanation };
       parseError = false;
+    } else if (looksLikeStructuredSqlPayload(result)) {
+      parsed = {
+        sql: '',
+        explanation: '⚠️ AI 응답 형식을 해석하지 못했습니다. 같은 질문을 한 번 더 시도해주세요.',
+      };
     } else if (result.length > 20) {
       // SQL 블록 없지만 응답이 충분하면 → 전체를 explanation으로 (데이터 조회 후 직접 답변한 경우)
       parsed = { sql: '', explanation: result };

@@ -1,4 +1,5 @@
 import { parseStoredPresentation, parseStoredQueryResult } from './presentation';
+import { parseStructuredSqlResponse } from './structured-response';
 
 export const CHAT_MESSAGE_STATUS = {
   PENDING: 'pending',
@@ -42,25 +43,55 @@ function normalizeStatus(status?: string | null): ChatMessageStatus {
   return CHAT_MESSAGE_STATUS.COMPLETED;
 }
 
+function normalizeAssistantContent(message: SerializableChatMessage) {
+  if (message.role !== 'assistant' || typeof message.content !== 'string') {
+    return message;
+  }
+
+  const parsed = parseStructuredSqlResponse(message.content);
+  if (!parsed) {
+    return message;
+  }
+
+  const normalizedExplanation = parsed.response.explanation.trim();
+  const normalizedSql =
+    typeof message.sql === 'string' && message.sql.trim()
+      ? message.sql
+      : (parsed.response.sql || parsed.response.dataQuery || null);
+  const fallbackContent = parsed.response.needsData
+    ? '데이터 확인용 쿼리를 생성했습니다.'
+    : normalizedSql
+      ? '쿼리를 생성했습니다.'
+      : message.content;
+
+  return {
+    ...message,
+    content: normalizedExplanation || fallbackContent,
+    sql: normalizedSql,
+  };
+}
+
 export function isActiveChatMessageStatus(status?: string | null) {
   return status === CHAT_MESSAGE_STATUS.PENDING || status === CHAT_MESSAGE_STATUS.RUNNING;
 }
 
 export function serializeChatMessage(message: SerializableChatMessage) {
+  const normalizedMessage = normalizeAssistantContent(message);
+
   return {
-    ...message,
-    status: normalizeStatus(message.status),
-    errorMessage: message.errorMessage ?? null,
-    parseError: Boolean(message.parseError),
-    validated: message.validated ?? null,
-    validationMode: message.validationMode ?? null,
-    validationError: message.validationError ?? null,
-    validationAttempts: message.validationAttempts ?? null,
+    ...normalizedMessage,
+    status: normalizeStatus(normalizedMessage.status),
+    errorMessage: normalizedMessage.errorMessage ?? null,
+    parseError: Boolean(normalizedMessage.parseError),
+    validated: normalizedMessage.validated ?? null,
+    validationMode: normalizedMessage.validationMode ?? null,
+    validationError: normalizedMessage.validationError ?? null,
+    validationAttempts: normalizedMessage.validationAttempts ?? null,
     presentation: parseStoredPresentation(
-      typeof message.presentation === 'string' ? message.presentation : null
+      typeof normalizedMessage.presentation === 'string' ? normalizedMessage.presentation : null
     ),
     resultSnapshot: parseStoredQueryResult(
-      typeof message.resultSnapshot === 'string' ? message.resultSnapshot : null
+      typeof normalizedMessage.resultSnapshot === 'string' ? normalizedMessage.resultSnapshot : null
     ),
   };
 }

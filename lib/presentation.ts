@@ -441,11 +441,54 @@ export function serializeQueryResult(snapshot: QueryResultSnapshot | null | unde
 }
 
 export function extractJsonObject(text: string) {
-  const fenced = text.match(/```json\s*([\s\S]*?)\s*```/);
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```(?:json|javascript|js)?\s*([\s\S]*?)\s*```$/i);
   if (fenced?.[1]) {
-    return fenced[1];
+    return fenced[1].trim();
   }
 
-  const objectMatch = text.match(/\{[\s\S]*\}/);
-  return objectMatch?.[0] ?? text;
+  let startIndex = -1;
+  let depth = 0;
+  let inString = false;
+  let isEscaped = false;
+
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const character = trimmed[index];
+
+    if (isEscaped) {
+      isEscaped = false;
+      continue;
+    }
+
+    if (character === '\\') {
+      isEscaped = true;
+      continue;
+    }
+
+    if (character === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (character === '{') {
+      if (depth === 0) {
+        startIndex = index;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (character === '}') {
+      depth -= 1;
+      if (depth === 0 && startIndex !== -1) {
+        return trimmed.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  return trimmed;
 }
