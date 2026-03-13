@@ -9,6 +9,7 @@ const execAsync = promisify(exec);
 
 export interface AIRunOptions {
   sessionKey?: string;
+  systemPrompt?: string;
   timeout?: number;
 }
 
@@ -43,6 +44,7 @@ export async function runAI(
   if (mode === 'openclaw') {
     return callOpenClaw(prompt, {
       sessionKey: options.sessionKey,
+      systemPrompt: options.systemPrompt,
       timeout: options.timeout,
     });
   }
@@ -56,7 +58,10 @@ export async function runClaudeCLI(
   options?: AIRunOptions
 ): Promise<string> {
   const tempFile = join(tmpdir(), `claude-prompt-${Date.now()}.txt`);
-  await writeFile(tempFile, prompt, 'utf-8');
+  const promptWithSystemContext = options?.systemPrompt
+    ? `최우선 시스템 지시:\n${options.systemPrompt}\n\n사용자 요청:\n${prompt}`
+    : prompt;
+  await writeFile(tempFile, promptWithSystemContext, 'utf-8');
 
   try {
     console.log('[Claude CLI] Executing command...');

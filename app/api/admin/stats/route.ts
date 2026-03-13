@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { checkAdminAuth } from '@/lib/admin';
 import { prisma } from '@/lib/db';
+import { getStartOfTodayInAppTimeZone } from '@/lib/time-context';
 
 export async function GET() {
   const auth = await checkAdminAuth();
@@ -9,9 +10,7 @@ export async function GET() {
   }
 
   try {
-    // KST 기준 오늘 시작 시간
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getStartOfTodayInAppTimeZone();
 
     // 24시간 전
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);

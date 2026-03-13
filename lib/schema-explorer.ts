@@ -4,6 +4,7 @@ import {
   searchMySQLSchema,
 } from './mysql';
 import { getRelevantSchema } from './schema';
+import { buildCurrentTimePromptContext } from './time-context';
 
 interface ChatHistoryLike {
   role: 'user' | 'assistant';
@@ -107,6 +108,7 @@ async function planSchemaExploration(
   sessionId?: string,
   options?: SchemaExplorationOptions
 ): Promise<SchemaExplorationPlan> {
+  const currentTimePrompt = buildCurrentTimePromptContext();
   const excludedTables = options?.excludedTables?.filter(Boolean) ?? [];
   const previousSelectedItems = options?.previousSelectedItems?.filter(Boolean) ?? [];
   const retryContext = options?.retryReason?.trim()
@@ -125,6 +127,8 @@ async function planSchemaExploration(
 사용자 질문에 답하기 위해 어떤 테이블/컬럼을 먼저 찾아봐야 하는지 짧게 계획하세요.
 SQL은 작성하지 마세요.
 
+${currentTimePrompt}
+
 반드시 JSON으로만 답하세요:
 {"searchTerms":["..."],"tableCandidates":["..."],"columnCandidates":["..."],"reason":"..."}
 
@@ -142,7 +146,7 @@ ${buildRecentUserContext(history)}현재 질문:
 ${question}`;
 
   const raw = await runAI(plannerPrompt, {
-    sessionKey: sessionId ? `${sessionId}:schema-plan` : undefined,
+    systemPrompt: currentTimePrompt,
     timeout: 30000,
   });
 

@@ -4,6 +4,7 @@ import { getUnprocessedFeedbacks, buildFeedbackPrompt } from './feedback';
 import { getFrequentTables, buildFrequentTablesPrompt } from './learning';
 import { logGenerationError } from './error-logger';
 import { runAI, runClaudeCLI } from './ai-runtime';
+import { buildCurrentTimePromptContext } from './time-context';
 import {
   buildFallbackPresentation,
   extractJsonObject,
@@ -88,6 +89,8 @@ export async function generateSQL(
   userId?: string,
   sessionId?: string
 ): Promise<SQLResponse> {
+  const currentTimePrompt = buildCurrentTimePromptContext();
+
   // 사용자 선호도 및 컨텍스트 로드
   let stylePrompt = '';
   let contextPrompt = '';
@@ -200,6 +203,8 @@ ${dataPreview}
 사용자의 자연어 요청을 SQL 쿼리로 변환하고, 쿼리에 대한 설명을 한국어로 제공합니다.
 이전 대화 맥락이 있다면 참고하여 응답해주세요.
 
+${currentTimePrompt}
+
 ${stylePrompt}${contextPrompt}${feedbackPrompt}${frequentTablesPrompt}
 
 **결과 표현 우선순위**:
@@ -232,7 +237,9 @@ ${stylePrompt}${contextPrompt}${feedbackPrompt}${frequentTablesPrompt}
 ${schema ? `DB 스키마:\n${schema}\n\n` : ''}${conversationContext}${dataContext}현재 요청: ${prompt}`;
 
   // AI 백엔드 모드에 따라 호출 (OpenClaw 또는 Claude CLI)
-  const result = await runAI(fullPrompt, sessionId);
+  const result = await runAI(fullPrompt, {
+    systemPrompt: currentTimePrompt,
+  });
 
   let parsed;
   let parseError = false;
@@ -549,7 +556,6 @@ ${JSON.stringify(previewRows, null, 2)}`;
   let raw = '';
   try {
     raw = await runAI(prompt, {
-      sessionKey: sessionId ? `${sessionId}:presentation` : undefined,
       timeout: 30000,
     });
     const parsed = reportPresentationSchema.parse(JSON.parse(extractJsonObject(raw)));
