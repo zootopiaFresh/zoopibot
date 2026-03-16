@@ -154,12 +154,53 @@ model ChatSession {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   messages  ChatMessage[]
+  runs      ChatRun[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([updatedAt])
+}
+
+model ChatRun {
+  id             String   @id @default(cuid())
+  agentId        String
+  requirementSetId String?
+  status         String   @default("queued") // "queued" | "running" | "completed" | "failed"
+  inputMessageId String?
+  outputMessageId String?
+  errorMessage   String?
+  meta           String?
+
+  sessionId      String
+  session        ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  messages       ChatMessage[]
+  checkpoints    ChatRunCheckpoint[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  @@index([sessionId])
+  @@index([sessionId, status])
+}
+
+model ChatRunCheckpoint {
+  id        String   @id @default(cuid())
+  step      String
+  status    String   // "running" | "completed" | "failed"
+  attempt   Int?
+  payload   String?
+
+  runId     String
+  run       ChatRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([runId, createdAt])
 }
 
 model ChatMessage {
@@ -179,6 +220,8 @@ model ChatMessage {
 
   sessionId String
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  runId     String?
+  run       ChatRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   startedAt DateTime?
@@ -186,6 +229,7 @@ model ChatMessage {
 
   @@index([sessionId])
   @@index([sessionId, status])
+  @@index([runId])
 }
 
 // ==================== 스키마 프롬프트 관리 ====================

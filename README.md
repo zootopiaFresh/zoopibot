@@ -202,6 +202,28 @@ API 키/Provider만 따로 바꾸려면:
 yarn dev
 ```
 
+### OpenClaw 공통 모듈 재사용
+
+Zoopibot 내부에서는 OpenClaw 관련 로직을 공통 entrypoint로 정리해두었습니다.
+
+공개 경로:
+
+- TypeScript client: [lib/openclaw-client.ts](lib/openclaw-client.ts)
+- TypeScript runner: [lib/openclaw-runner.mjs](lib/openclaw-runner.mjs)
+- Shell helper: [scripts/lib/openclaw-public.sh](scripts/lib/openclaw-public.sh)
+
+관련 문서:
+
+- 공개 계약: [openclaw-public-contract.md](docs/openclaw-public-contract.md)
+- 모듈화 TODO: [openclaw-modularization-todo.md](docs/openclaw-modularization-todo.md)
+- 최소 예제: [examples/openclaw-minimal/README.md](examples/openclaw-minimal/README.md)
+
+선택적 live smoke test:
+
+```bash
+RUN_OPENCLAW_SMOKE=1 yarn test:openclaw:smoke
+```
+
 ## 프로젝트 구조
 
 ```

@@ -12,6 +12,16 @@ BOLD='\033[1m'
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 OPENCLAW_CMD="${OPENCLAW_CMD:-$PROJECT_DIR/scripts/openclaw-cli.sh}"
+COMMON_LIB="$PROJECT_DIR/scripts/lib/openclaw-public.sh"
+OPENCLAW_PROJECT_SKILL_NAME="${OPENCLAW_PROJECT_SKILL_NAME:-zoopibot-query}"
+OPENCLAW_PROJECT_SKILL_SOURCE_DIR="${OPENCLAW_PROJECT_SKILL_SOURCE_DIR:-$PROJECT_DIR/openclaw/skills/$OPENCLAW_PROJECT_SKILL_NAME}"
+OPENCLAW_PROJECT_URL_ENV_NAME="${OPENCLAW_PROJECT_URL_ENV_NAME:-ZOOPIBOT_URL}"
+OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME="${OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME:-ZOOPIBOT_SERVICE_TOKEN}"
+OPENCLAW_PROJECT_PUBLIC_URL="${OPENCLAW_PROJECT_PUBLIC_URL:-}"
+OPENCLAW_PROJECT_SERVICE_TOKEN="${OPENCLAW_PROJECT_SERVICE_TOKEN:-}"
+
+# shellcheck disable=SC1090
+source "$COMMON_LIB"
 
 print_header() {
   echo ""
@@ -163,7 +173,7 @@ if [ "$SKIP_ENV" != "true" ]; then
   echo ""
   echo -e "  ${BOLD}[ 인증 설정 ]${NC}"
   # 랜덤 시크릿 생성
-  DEFAULT_SECRET=$(openssl rand -hex 32 2>/dev/null || echo "change-me-$(date +%s)")
+  DEFAULT_SECRET=$(generate_secret 32)
   prompt_input "NextAuth Secret" "$DEFAULT_SECRET" NEXTAUTH_SECRET
   prompt_input "NextAuth URL" "http://localhost:3000" NEXTAUTH_URL
 
@@ -181,25 +191,31 @@ if [ "$SKIP_ENV" != "true" ]; then
   fi
 
   OPENCLAW_PROVIDER_MODE="openai-api-key"
-  OPENCLAW_PRIMARY_MODEL="openai/gpt-5.4"
+  OPENCLAW_PRIMARY_MODEL=""
   OPENAI_API_KEY=""
 
   if [ "$AI_BACKEND" = "openclaw" ]; then
     if [ "$ai_choice" = "2" ]; then
       OPENCLAW_PROVIDER_MODE="openai-codex"
-      OPENCLAW_PRIMARY_MODEL="openai-codex/gpt-5.4"
     fi
+
+    if ! openclaw_provider_metadata "$OPENCLAW_PROVIDER_MODE" "$OPENCLAW_CMD"; then
+      print_fail "지원하지 않는 OpenClaw provider입니다: $OPENCLAW_PROVIDER_MODE"
+      exit 1
+    fi
+
+    OPENCLAW_PRIMARY_MODEL="${OPENCLAW_PROVIDER_DEFAULT_MODEL}"
   fi
 
   # Gateway 토큰 생성
-  DEFAULT_GW_TOKEN=$(openssl rand -hex 16 2>/dev/null || echo "gw-token-$(date +%s)")
-  DEFAULT_SVC_TOKEN=$(openssl rand -hex 16 2>/dev/null || echo "svc-token-$(date +%s)")
+  DEFAULT_GW_TOKEN=$(generate_secret 16)
+  DEFAULT_SVC_TOKEN=$(generate_secret 16)
 
   if [ "$AI_BACKEND" = "openclaw" ]; then
     prompt_input "OpenClaw Gateway URL" "http://127.0.0.1:18789" OPENCLAW_URL
     prompt_input "OpenClaw Gateway Token" "$DEFAULT_GW_TOKEN" OPENCLAW_GATEWAY_TOKEN
 
-    if [ "$OPENCLAW_PROVIDER_MODE" = "openai-api-key" ]; then
+    if [ -n "$OPENCLAW_PROVIDER_INLINE_ENV_KEY" ]; then
       echo ""
       echo -e "  ${BOLD}[ Codex API 설정 ]${NC}"
       prompt_secret "OpenAI API Key" "" OPENAI_API_KEY
@@ -210,7 +226,8 @@ if [ "$SKIP_ENV" != "true" ]; then
     fi
   fi
 
-  prompt_input "v2 API 서비스 토큰" "$DEFAULT_SVC_TOKEN" ZOOPIBOT_SERVICE_TOKEN
+  prompt_input "v2 API 서비스 토큰" "$DEFAULT_SVC_TOKEN" OPENCLAW_PROJECT_SERVICE_TOKEN
+  OPENCLAW_PROJECT_PUBLIC_URL="${OPENCLAW_PROJECT_PUBLIC_URL:-$NEXTAUTH_URL}"
 
   # .env 파일 작성
   cat > "$ENV_FILE" << ENVEOF
@@ -241,7 +258,7 @@ OPENCLAW_PROVIDER_MODE=${OPENCLAW_PROVIDER_MODE}
 OPENCLAW_PRIMARY_MODEL=${OPENCLAW_PRIMARY_MODEL}
 
 # --- v2 API 서비스 토큰 ---
-ZOOPIBOT_SERVICE_TOKEN=${ZOOPIBOT_SERVICE_TOKEN}
+${OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME}=${OPENCLAW_PROJECT_SERVICE_TOKEN}
 ENVEOF
 
   print_ok ".env 파일 생성 완료"
@@ -261,6 +278,8 @@ fi
 
 # .env 로드
 source "$ENV_FILE" 2>/dev/null || true
+OPENCLAW_PROJECT_PUBLIC_URL="${OPENCLAW_PROJECT_PUBLIC_URL:-${NEXTAUTH_URL:-http://localhost:3000}}"
+OPENCLAW_PROJECT_SERVICE_TOKEN="${OPENCLAW_PROJECT_SERVICE_TOKEN:-${!OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME:-}}"
 
 echo -e "  마이그레이션 실행 중..."
 DATABASE_URL="file:./dev.db" npx prisma@5.22.0 migrate dev 2>&1 | grep -E "(Applying|Applied|already in sync|Generated)" | head -10
@@ -279,19 +298,25 @@ mkdir -p "$SKILLS_DIR"
 mkdir -p "$OPENCLAW_DIR/workspace"
 
 # 스킬 복사
-if [ -d "$PROJECT_DIR/openclaw/skills/zoopibot-query" ]; then
-  cp -r "$PROJECT_DIR/openclaw/skills/zoopibot-query" "$SKILLS_DIR/"
-  print_ok "zoopibot-query 스킬 복사 완료 → $SKILLS_DIR/zoopibot-query/"
+if install_openclaw_skill "$OPENCLAW_PROJECT_SKILL_SOURCE_DIR" "$SKILLS_DIR" "$OPENCLAW_PROJECT_SKILL_NAME"; then
+  print_ok "$OPENCLAW_PROJECT_SKILL_NAME 스킬 복사 완료 → $SKILLS_DIR/$OPENCLAW_PROJECT_SKILL_NAME/"
 fi
 
 # openclaw.json 생성 (토큰 주입)
 GW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-$DEFAULT_GW_TOKEN}"
-SVC_TOKEN="${ZOOPIBOT_SERVICE_TOKEN:-$DEFAULT_SVC_TOKEN}"
+SVC_TOKEN="${OPENCLAW_PROJECT_SERVICE_TOKEN:-$DEFAULT_SVC_TOKEN}"
 PROVIDER_MODE="${OPENCLAW_PROVIDER_MODE:-openai-api-key}"
 PRIMARY_MODEL="${OPENCLAW_PRIMARY_MODEL:-openai/gpt-5.4}"
-ENV_BLOCK=""
+PROVIDER_ENV_KEY=""
+PROVIDER_ENV_VALUE=""
+SKILL_ENTRY_JSON=""
 
-if [ "$PROVIDER_MODE" = "openai-api-key" ]; then
+if ! openclaw_provider_metadata "$PROVIDER_MODE" "$OPENCLAW_CMD"; then
+  print_fail "지원하지 않는 OpenClaw provider입니다: $PROVIDER_MODE"
+  exit 1
+fi
+
+if [ -n "$OPENCLAW_PROVIDER_INLINE_ENV_KEY" ]; then
   if [ -z "${OPENAI_API_KEY:-}" ]; then
     echo ""
     echo -e "  ${BOLD}[ Codex API 설정 ]${NC}"
@@ -302,60 +327,29 @@ if [ "$PROVIDER_MODE" = "openai-api-key" ]; then
     fi
   fi
 
-  OPENAI_KEY_VALUE="${OPENAI_API_KEY:-}"
-  ENV_BLOCK=$(cat <<EOF
-  "env": {
-    "OPENAI_API_KEY": "${OPENAI_KEY_VALUE}"
-  },
-
-EOF
-)
+  PROVIDER_ENV_KEY="$OPENCLAW_PROVIDER_INLINE_ENV_KEY"
+  PROVIDER_ENV_VALUE="${!OPENCLAW_PROVIDER_INLINE_ENV_KEY}"
 fi
 
-cat > "$OPENCLAW_DIR/openclaw.json" << OCEOF
-{
-  "\$schema": "https://openclaw.ai/schema/openclaw.json",
+SKILL_ENTRY_JSON="$(build_openclaw_skill_entry_json \
+  "$OPENCLAW_PROJECT_SKILL_NAME" \
+  "${OPENCLAW_PROJECT_URL_ENV_NAME}=${OPENCLAW_PROJECT_PUBLIC_URL:-http://localhost:3000}" \
+  "${OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME}=${SVC_TOKEN}")"
 
-${ENV_BLOCK}  "agents": {
-    "defaults": {
-      "workspace": "$OPENCLAW_DIR/workspace",
-      "model": {
-        "primary": "${PRIMARY_MODEL}"
-      }
-    }
-  },
-
-  "gateway": {
-    "mode": "local",
-    "port": 18789,
-    "auth": {
-      "token": "${GW_TOKEN}"
-    },
-    "http": {
-      "endpoints": {
-        "chatCompletions": { "enabled": true }
-      }
-    }
-  },
-
-  "skills": {
-    "entries": {
-      "zoopibot-query": {
-        "enabled": true,
-        "env": {
-          "ZOOPIBOT_URL": "http://localhost:3000",
-          "ZOOPIBOT_SERVICE_TOKEN": "${SVC_TOKEN}"
-        }
-      }
-    }
-  }
-}
-OCEOF
+write_openclaw_config \
+  "$OPENCLAW_DIR/openclaw.json" \
+  "$OPENCLAW_DIR/workspace" \
+  "$PRIMARY_MODEL" \
+  "18789" \
+  "$GW_TOKEN" \
+  "$SKILL_ENTRY_JSON" \
+  "$PROVIDER_ENV_KEY" \
+  "$PROVIDER_ENV_VALUE"
 
 print_ok "openclaw.json 생성 완료 → $OPENCLAW_DIR/openclaw.json"
 
-if [ "$PROVIDER_MODE" = "openai-codex" ]; then
-  echo -e "  ${YELLOW}추가 인증 필요:${NC} $OPENCLAW_CMD models auth login --provider openai-codex"
+if [ -n "$OPENCLAW_PROVIDER_AUTH_HINT" ]; then
+  echo -e "  ${YELLOW}추가 인증 필요:${NC} $OPENCLAW_PROVIDER_AUTH_HINT"
 fi
 
 # ─────────────────────────────────────────────

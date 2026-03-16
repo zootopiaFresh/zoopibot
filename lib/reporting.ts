@@ -1,6 +1,7 @@
 import { prisma } from './db';
 import { generatePresentation } from './claude';
 import { executeQuery } from './mysql';
+import type { AIRunner } from './ai-runtime';
 import {
   parseStoredPresentation,
   queryResultSnapshotSchema,
@@ -43,7 +44,11 @@ export async function buildPresentationFromQueryResult(
   sql: string,
   explanation: string,
   queryResult: { rows: any[]; fields: any[] },
-  sessionId?: string
+  sessionId?: string,
+  options?: {
+    aiRunner?: AIRunner;
+    presentationAppendix?: string[];
+  }
 ): Promise<{ snapshot: QueryResultSnapshot; presentation: ReportPresentation }> {
   const snapshot = buildSnapshotFromQueryResult(queryResult.rows, queryResult.fields);
   const previousPresentation = await getPreviousPresentation(sessionId);
@@ -53,7 +58,8 @@ export async function buildPresentationFromQueryResult(
     explanation,
     snapshot,
     sessionId,
-    previousPresentation
+    previousPresentation,
+    options
   );
 
   return {
@@ -66,8 +72,12 @@ export async function buildPresentationFromSQL(
   question: string,
   sql: string,
   explanation: string,
-  sessionId?: string
+  sessionId?: string,
+  options?: {
+    aiRunner?: AIRunner;
+    presentationAppendix?: string[];
+  }
 ): Promise<{ snapshot: QueryResultSnapshot; presentation: ReportPresentation }> {
   const result = await executeQuery(sql);
-  return buildPresentationFromQueryResult(question, sql, explanation, result, sessionId);
+  return buildPresentationFromQueryResult(question, sql, explanation, result, sessionId, options);
 }

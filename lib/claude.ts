@@ -3,7 +3,7 @@ import { getUserContext, buildContextPrompt } from './context';
 import { getUnprocessedFeedbacks, buildFeedbackPrompt } from './feedback';
 import { getFrequentTables, buildFrequentTablesPrompt } from './learning';
 import { logGenerationError } from './error-logger';
-import { runAI, runClaudeCLI } from './ai-runtime';
+import { runAI, runClaudeCLI, type AIRunner } from './ai-runtime';
 import { buildCurrentTimePromptContext } from './time-context';
 import {
   buildFallbackPresentation,
@@ -91,8 +91,13 @@ export async function generateSQL(
   history?: ChatHistory[],
   queryResult?: { query: string; data: any[] },
   userId?: string,
-  sessionId?: string
+  sessionId?: string,
+  options?: {
+    aiRunner?: AIRunner;
+    sqlAppendix?: string[];
+  }
 ): Promise<SQLResponse> {
+  const aiRunner = options?.aiRunner ?? runAI;
   const currentTimePrompt = buildCurrentTimePromptContext();
 
   // 사용자 선호도 및 컨텍스트 로드
@@ -203,6 +208,11 @@ ${dataPreview}
 `;
   }
 
+  const ruleAppendix =
+    options?.sqlAppendix && options.sqlAppendix.length > 0
+      ? `\n추가 요구사항:\n${options.sqlAppendix.map((rule) => `- ${rule}`).join('\n')}\n`
+      : '';
+
   const fullPrompt = `당신은 SQL 전문가입니다.
 사용자의 자연어 요청을 SQL 쿼리로 변환하고, 쿼리에 대한 설명을 한국어로 제공합니다.
 이전 대화 맥락이 있다면 참고하여 응답해주세요.
@@ -231,6 +241,7 @@ ${stylePrompt}${contextPrompt}${feedbackPrompt}${frequentTablesPrompt}
 - 제공된 테이블/컬럼만 사용하고, 없는 테이블이나 컬럼을 새로 지어내지는 마세요.
 - 정말로 핵심 테이블이나 핵심 컬럼이 전혀 없을 때만 explanation에 한계를 적으세요. 이미 보이는 스키마가 있으면 다시 스키마를 요청하지 마세요.
 - explanation에는 "더 찾아볼게요", "탐색해볼게요", "확인해볼게요"처럼 후속 행동을 약속하는 표현을 쓰지 마세요. 이 응답이 곧 최종 응답이라고 가정하고 현재 가능한 답만 말하세요.
+${ruleAppendix}
 
 **반드시** 아래 JSON 형식으로만 응답하세요. JSON 외의 텍스트는 절대 포함하지 마세요:
 {"sql": "SELECT ...", "explanation": "이 쿼리는...", "needsData": false, "dataQuery": ""}
@@ -241,7 +252,7 @@ ${stylePrompt}${contextPrompt}${feedbackPrompt}${frequentTablesPrompt}
 ${schema ? `DB 스키마:\n${schema}\n\n` : ''}${conversationContext}${dataContext}현재 요청: ${prompt}`;
 
   // AI 백엔드 모드에 따라 호출 (OpenClaw 또는 Claude CLI)
-  const result = await runAI(fullPrompt, {
+  const result = await aiRunner(fullPrompt, {
     systemPrompt: currentTimePrompt,
   });
 
@@ -465,8 +476,13 @@ export async function generatePresentation(
   explanation: string,
   snapshot: QueryResultSnapshot,
   sessionId?: string,
-  previousPresentation?: ReportPresentation
+  previousPresentation?: ReportPresentation,
+  options?: {
+    aiRunner?: AIRunner;
+    presentationAppendix?: string[];
+  }
 ): Promise<ReportPresentation> {
+  const aiRunner = options?.aiRunner ?? runAI;
   const allowCharts = questionExplicitlyRequestsChart(question);
 
   if (snapshot.rows.length === 0) {
@@ -514,6 +530,10 @@ export async function generatePresentation(
     { "type": "metric-row", "title": "핵심 지표", "items": [{ "label": "활성 구독자", "field": "active_users", "format": "number" }] },
     { "type": "table", "title": "상세 목록", "columns": [{ "key": "user_id", "label": "사용자 ID", "format": "text" }], "maxRows": 20 }
   ]`;
+  const appendix =
+    options?.presentationAppendix && options.presentationAppendix.length > 0
+      ? `\n추가 요구사항:\n${options.presentationAppendix.map((rule) => `- ${rule}`).join('\n')}\n`
+      : '';
   const prompt = `당신은 BI 리포트 편집자입니다.
 질문과 SQL 결과를 보고 사람이 이해하기 쉬운 블록형 응답 계획 JSON만 반환하세요.
 
@@ -536,6 +556,7 @@ ${bodyStructurePrompt}
 - blocks는 1~4개만 사용하세요.
 - 확신이 없으면 table을 포함하세요.
 - JSON 외 텍스트를 절대 출력하지 마세요.
+${appendix}
 
 반환 형식:
 {
@@ -567,7 +588,7 @@ ${JSON.stringify(previewRows, null, 2)}`;
 
   let raw = '';
   try {
-    raw = await runAI(prompt, {
+    raw = await aiRunner(prompt, {
       timeout: 30000,
     });
     const parsed = reportPresentationSchema.parse(JSON.parse(extractJsonObject(raw)));

@@ -1,4 +1,4 @@
-import { runAI } from './ai-runtime';
+import { runAI, type AIRunner } from './ai-runtime';
 import {
   buildSchemaContextFromSearchResults,
   searchMySQLSchema,
@@ -106,8 +106,13 @@ async function planSchemaExploration(
   question: string,
   history?: ChatHistoryLike[],
   sessionId?: string,
-  options?: SchemaExplorationOptions
+  options?: SchemaExplorationOptions,
+  dependencies?: {
+    aiRunner?: AIRunner;
+    plannerAppendix?: string[];
+  }
 ): Promise<SchemaExplorationPlan> {
+  const aiRunner = dependencies?.aiRunner ?? runAI;
   const currentTimePrompt = buildCurrentTimePromptContext();
   const excludedTables = options?.excludedTables?.filter(Boolean) ?? [];
   const previousSelectedItems = options?.previousSelectedItems?.filter(Boolean) ?? [];
@@ -123,6 +128,10 @@ async function planSchemaExploration(
   const exclusionRule = excludedTables.length > 0
     ? `- excludedTables에 포함된 테이블은 tableCandidates에 다시 넣지 마세요: ${excludedTables.join(', ')}`
     : '';
+  const plannerAppendix =
+    dependencies?.plannerAppendix && dependencies.plannerAppendix.length > 0
+      ? `${dependencies.plannerAppendix.map((rule) => `- ${rule}`).join('\n')}\n`
+      : '';
   const plannerPrompt = `당신은 MySQL 스키마 탐색 플래너입니다.
 사용자 질문에 답하기 위해 어떤 테이블/컬럼을 먼저 찾아봐야 하는지 짧게 계획하세요.
 SQL은 작성하지 마세요.
@@ -139,13 +148,14 @@ ${currentTimePrompt}
 - 가능하면 실제 MySQL 식별자 스타일을 우선하세요. 예: member, order_detail, createdAt, member_no
 - 질문에 직접 나온 단어 외에도, 관계/상세/프로필/매핑/설정/가족 등 한 단계 넓은 연관 엔티티를 고려하세요.
 ${exclusionRule}
+${plannerAppendix}
 - JSON 외 텍스트를 쓰지 마세요.
 
 ${retryContext}
 ${buildRecentUserContext(history)}현재 질문:
 ${question}`;
 
-  const raw = await runAI(plannerPrompt, {
+  const raw = await aiRunner(plannerPrompt, {
     systemPrompt: currentTimePrompt,
     timeout: 30000,
   });
@@ -157,10 +167,20 @@ export async function resolveSchemaContext(
   question: string,
   history?: ChatHistoryLike[],
   sessionId?: string,
-  options?: SchemaExplorationOptions
+  options?: SchemaExplorationOptions,
+  dependencies?: {
+    aiRunner?: AIRunner;
+    plannerAppendix?: string[];
+  }
 ): Promise<ResolvedSchemaContext> {
   try {
-    const plan = await planSchemaExploration(question, history, sessionId, options);
+    const plan = await planSchemaExploration(
+      question,
+      history,
+      sessionId,
+      options,
+      dependencies
+    );
     const searchResults = await searchMySQLSchema({
       question,
       searchTerms: plan.searchTerms,

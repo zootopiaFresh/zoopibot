@@ -6,10 +6,10 @@ import { fileURLToPath } from "node:url";
 import {
   createOpenClawRunner,
   resolveOpenClawRunnerConfig,
-} from "../lib/openclaw-runner.mjs";
+} from "../../lib/openclaw-runner.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const projectDir = path.resolve(scriptDir, "..");
+const projectDir = path.resolve(scriptDir);
 
 let config;
 
@@ -17,7 +17,7 @@ try {
   config = resolveOpenClawRunnerConfig({
     appCommand: process.argv.slice(2),
     env: process.env,
-    gatewayCmdDefault: path.join(projectDir, "scripts/openclaw-cli.sh"),
+    gatewayCmdDefault: path.join(process.cwd(), "scripts/openclaw-cli.sh"),
     projectDir,
   });
 } catch (error) {

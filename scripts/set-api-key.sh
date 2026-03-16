@@ -3,6 +3,10 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$PROJECT_DIR/.env}"
+COMMON_LIB="$PROJECT_DIR/scripts/lib/openclaw-public.sh"
+
+# shellcheck disable=SC1090
+source "$COMMON_LIB"
 
 usage() {
   cat <<'EOF'
@@ -41,35 +45,11 @@ prompt_secret() {
 }
 
 upsert_env() {
-  local key="$1"
-  local value="$2"
-  local tmp
-  tmp="$(mktemp)"
-  touch "$ENV_FILE"
-  awk -v key="$key" -v value="$value" '
-    BEGIN { done = 0 }
-    index($0, key "=") == 1 {
-      print key "=\"" value "\""
-      done = 1
-      next
-    }
-    { print }
-    END {
-      if (!done) {
-        print key "=\"" value "\""
-      }
-    }
-  ' "$ENV_FILE" > "$tmp"
-  mv "$tmp" "$ENV_FILE"
+  upsert_env_file "$ENV_FILE" "$1" "$2"
 }
 
 delete_env() {
-  local key="$1"
-  local tmp
-  tmp="$(mktemp)"
-  touch "$ENV_FILE"
-  awk -v key="$key" 'index($0, key "=") != 1 { print }' "$ENV_FILE" > "$tmp"
-  mv "$tmp" "$ENV_FILE"
+  delete_env_file "$ENV_FILE" "$1"
 }
 
 load_existing_env() {
@@ -109,24 +89,35 @@ upsert_env OPENCLAW_PROVIDER_MODE "$PROVIDER"
 
 case "$PROVIDER" in
   openai-api-key)
+    if ! openclaw_provider_metadata "$PROVIDER"; then
+      echo "[set-api-key] ERROR: 지원하지 않는 provider입니다: $PROVIDER" >&2
+      exit 1
+    fi
     OPENAI_KEY="$(prompt_secret "OpenAI API Key")"
     if [ -z "$OPENAI_KEY" ]; then
       echo "[set-api-key] ERROR: OPENAI_API_KEY는 비워둘 수 없습니다." >&2
       exit 1
     fi
     upsert_env OPENAI_API_KEY "$OPENAI_KEY"
-    upsert_env OPENCLAW_PRIMARY_MODEL "openai/gpt-5.4"
-    delete_env ANTHROPIC_API_KEY
+    upsert_env OPENCLAW_PRIMARY_MODEL "$OPENCLAW_PROVIDER_DEFAULT_MODEL"
+    clear_openclaw_provider_secret_envs "$ENV_FILE" "OPENAI_API_KEY"
     echo "[set-api-key] OPENAI_API_KEY와 OPENCLAW_PROVIDER_MODE를 저장했습니다."
     ;;
   openai-codex)
-    upsert_env OPENCLAW_PRIMARY_MODEL "openai-codex/gpt-5.4"
-    delete_env OPENAI_API_KEY
-    delete_env ANTHROPIC_API_KEY
+    if ! openclaw_provider_metadata "$PROVIDER" "$PROJECT_DIR/scripts/openclaw-cli.sh"; then
+      echo "[set-api-key] ERROR: 지원하지 않는 provider입니다: $PROVIDER" >&2
+      exit 1
+    fi
+    upsert_env OPENCLAW_PRIMARY_MODEL "$OPENCLAW_PROVIDER_DEFAULT_MODEL"
+    clear_openclaw_provider_secret_envs "$ENV_FILE"
     echo "[set-api-key] OPENCLAW_PROVIDER_MODE를 openai-codex로 저장했습니다."
-    echo "[set-api-key] 다음 명령으로 1회 인증하세요: ./scripts/openclaw-cli.sh models auth login --provider openai-codex"
+    echo "[set-api-key] 다음 명령으로 1회 인증하세요: $OPENCLAW_PROVIDER_AUTH_HINT"
     ;;
   anthropic-api-key)
+    if ! openclaw_provider_metadata "$PROVIDER"; then
+      echo "[set-api-key] ERROR: 지원하지 않는 provider입니다: $PROVIDER" >&2
+      exit 1
+    fi
     ANTHROPIC_KEY="$(prompt_secret "Anthropic API Key")"
     if [ -z "$ANTHROPIC_KEY" ]; then
       echo "[set-api-key] ERROR: ANTHROPIC_API_KEY는 비워둘 수 없습니다." >&2
@@ -140,7 +131,7 @@ case "$PROVIDER" in
     fi
     upsert_env ANTHROPIC_API_KEY "$ANTHROPIC_KEY"
     upsert_env OPENCLAW_PRIMARY_MODEL "$PRIMARY_MODEL"
-    delete_env OPENAI_API_KEY
+    clear_openclaw_provider_secret_envs "$ENV_FILE" "ANTHROPIC_API_KEY"
     echo "[set-api-key] ANTHROPIC_API_KEY와 OPENCLAW_PROVIDER_MODE를 저장했습니다."
     ;;
   -h|--help|help)
