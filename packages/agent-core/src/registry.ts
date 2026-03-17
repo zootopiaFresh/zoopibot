@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import type {
@@ -57,6 +57,14 @@ export class StaticAgentRegistry implements AgentRegistry {
   get(agentId: string) {
     return this.agents.get(agentId);
   }
+
+  getDefaultAgentId() {
+    if (this.agents.size !== 1) {
+      return undefined;
+    }
+
+    return this.agents.keys().next().value as string | undefined;
+  }
 }
 
 export class StaticToolRegistry implements ToolRegistry {
@@ -93,10 +101,20 @@ export function createStaticRequirementProvider(
 }
 
 export function createJsonRequirementProvider(filePath: string): RequirementProvider {
+  let cachedMtimeMs: number | null = null;
+  let cachedSpecs: Record<string, RequirementSpec | undefined> | null = null;
+
   return async (agentId, requirementSetId) => {
     const absolutePath = resolve(filePath);
-    const raw = await readFile(absolutePath, 'utf-8');
-    const parsed = JSON.parse(raw) as Record<string, RequirementSpec | undefined>;
+    const fileStat = await stat(absolutePath);
+
+    if (!cachedSpecs || cachedMtimeMs !== fileStat.mtimeMs) {
+      const raw = await readFile(absolutePath, 'utf-8');
+      cachedSpecs = JSON.parse(raw) as Record<string, RequirementSpec | undefined>;
+      cachedMtimeMs = fileStat.mtimeMs;
+    }
+
+    const parsed = cachedSpecs;
 
     if (requirementSetId) {
       const scopedKey = `${agentId}:${requirementSetId}`;
@@ -161,6 +179,35 @@ function validateSteps(steps: StepDefinition[], supportedStepKinds: Set<string>)
   }
 }
 
+function validateProgressStages(progressStages: ProgressStageConfig[], steps: StepDefinition[]) {
+  if (progressStages.length === 0) {
+    throw new Error('progressStages는 최소 1개 이상이어야 합니다.');
+  }
+
+  const stageIds = new Set<string>();
+  for (const stage of progressStages) {
+    if (stageIds.has(stage.id)) {
+      throw new Error(`중복된 progress stage id입니다: ${stage.id}`);
+    }
+    stageIds.add(stage.id);
+  }
+
+  for (const step of steps) {
+    if (step.kind !== 'emit_step') {
+      continue;
+    }
+
+    const stageId = typeof step.config?.stageId === 'string' ? step.config.stageId : null;
+    if (!stageId) {
+      throw new Error(`step ${step.id}의 emit_step에는 stageId가 필요합니다.`);
+    }
+
+    if (!stageIds.has(stageId)) {
+      throw new Error(`step ${step.id}가 존재하지 않는 progress stage를 참조합니다: ${stageId}`);
+    }
+  }
+}
+
 function validateTools(toolRegistry: ToolRegistry, allowedTools: string[], steps: StepDefinition[]) {
   for (const toolId of allowedTools) {
     if (!toolRegistry.get(toolId)) {
@@ -202,9 +249,9 @@ export function createSpecResolver(options: {
 
       const resolved = mergeRequirementSpec(agentSpec, override);
       validateSteps(resolved.steps, supportedStepKinds);
+      validateProgressStages(resolved.progressStages, resolved.steps);
       validateTools(toolRegistry, resolved.allowedTools, resolved.steps);
       return resolved;
     },
   };
 }
-

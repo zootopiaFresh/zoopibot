@@ -207,6 +207,12 @@ export interface SendInput extends StartRunInput {
   timeoutMs?: number;
 }
 
+export interface AskInput {
+  agentId?: string;
+  requirementSetId?: string;
+  meta?: Record<string, unknown>;
+}
+
 export interface ConversationStore {
   getThread(threadId: string): Promise<ConversationThread | null>;
   ensureThread(threadId: string, meta?: Record<string, unknown>): Promise<ConversationThread>;
@@ -348,7 +354,6 @@ export interface ConversationThreadHandle {
 }
 
 export interface ConversationRuntime {
-  ask(input: string, options?: Omit<StartRunInput, 'input'>): Promise<string>;
+  ask(input: string, options?: AskInput): Promise<string>;
   thread(id: string): ConversationThreadHandle;
 }
-

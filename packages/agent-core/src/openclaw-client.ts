@@ -48,6 +48,11 @@ interface OpenClawClientDependencies {
   logger?: OpenClawLogger;
 }
 
+const silentLogger: OpenClawLogger = {
+  log() {},
+  error() {},
+};
+
 const DEFAULT_OPENCLAW_CONFIG: OpenClawConfig = {
   baseUrl: 'http://127.0.0.1:18789',
   token: '',
@@ -102,7 +107,7 @@ export function createOpenClawClient(
     baseUrl: normalizeBaseUrl(inputConfig.baseUrl || DEFAULT_OPENCLAW_CONFIG.baseUrl),
   };
   const fetchImpl: OpenClawFetch = dependencies.fetchImpl || fetch;
-  const logger = dependencies.logger || console;
+  const logger = dependencies.logger || silentLogger;
 
   async function call(prompt: string, options?: OpenClawCallOptions): Promise<string> {
     const messages: OpenClawMessage[] = [];
@@ -202,4 +207,3 @@ export function createOpenClawClient(
     config,
   };
 }
-

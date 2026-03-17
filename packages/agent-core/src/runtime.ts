@@ -45,6 +45,7 @@ interface CreateConversationRuntimeOptions<
   specResolver?: SpecResolver;
   capabilities?: Capabilities;
   stepHandlers?: StepHandlerMap<Capabilities>;
+  defaultAgentId?: string;
 }
 
 function nowIso() {
@@ -273,6 +274,9 @@ export function createConversationRuntime<
     emit() {},
   };
   const capabilities = (options.capabilities ?? {}) as Capabilities;
+  const defaultAgentId =
+    options.defaultAgentId ||
+    (agentRegistry instanceof StaticAgentRegistry ? agentRegistry.getDefaultAgentId() : undefined);
 
   async function logWorkflowError(runtime: WorkflowContext<Capabilities>, input: WorkflowErrorLogInput) {
     const handler = (runtime.capabilities as Record<string, unknown>).logError;
@@ -583,9 +587,16 @@ export function createConversationRuntime<
   return {
     async ask(input, options) {
       const threadId = `ephemeral:${randomUUID()}`;
+      const agentId = options?.agentId || defaultAgentId;
+      if (!agentId) {
+        throw new Error(
+          '`ask()`를 사용하려면 `agentId`를 명시하거나 createConversationRuntime에 `defaultAgentId`를 설정하세요.'
+        );
+      }
+
       const run = await createThreadHandle(threadId).send({
         input,
-        agentId: options?.agentId || 'default-agent',
+        agentId,
         requirementSetId: options?.requirementSetId,
         meta: options?.meta,
       });
