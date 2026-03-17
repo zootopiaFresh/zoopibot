@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,6 +55,27 @@ try {
     ],
     smokeDir
   );
+
+  run(
+    path.join(smokeDir, 'node_modules', '.bin', 'agent-core'),
+    ['--help'],
+    smokeDir
+  );
+
+  run(
+    path.join(smokeDir, 'node_modules', '.bin', 'agent-core'),
+    ['openclaw', 'init', '--project-dir', smokeDir, '--provider', 'openai-codex'],
+    smokeDir
+  );
+
+  const envExample = readFileSync(path.join(smokeDir, '.env.example'), 'utf8');
+  const wrapper = readFileSync(path.join(smokeDir, 'run-with-openclaw.mjs'), 'utf8');
+  if (!envExample.includes('OPENCLAW_PROVIDER_MODE=openai-codex')) {
+    throw new Error('agent-core init가 .env.example에 provider를 쓰지 못했습니다.');
+  }
+  if (!wrapper.includes('createOpenClawRunner')) {
+    throw new Error('agent-core init가 wrapper 파일을 만들지 못했습니다.');
+  }
 
   console.log(`[agent-core:smoke] tarball ok: ${tarballPath}`);
   if (keepArtifacts) {

@@ -1,8 +1,11 @@
 {
   "name": "@zootopiafresh/agent-core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "UNLICENSED",
   "type": "module",
+  "bin": {
+    "agent-core": "./bin/agent-core.mjs"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,6 +31,7 @@
     }
   },
   "files": [
+    "bin",
     "dist"
   ],
   "publishConfig": {

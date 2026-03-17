@@ -83,6 +83,45 @@ OPENCLAW_AGENT_ID=main
 
 기본 OpenClaw client는 요청/응답 내용을 콘솔에 자동 출력하지 않습니다. 디버깅이 필요하면 `createOpenClawClient(..., { logger })`로 logger를 직접 주입하세요.
 
+## OpenClaw 세팅 도우미
+
+이제 패키지에는 OpenClaw 초기 세팅을 보조하는 CLI도 포함됩니다.
+
+초기 세팅:
+
+```bash
+agent-core openclaw init --provider openai-api-key
+```
+
+상태 점검:
+
+```bash
+agent-core openclaw doctor
+```
+
+`init`가 해주는 일:
+
+- `.env` 생성 또는 업데이트
+- `.env.example` 생성 또는 업데이트
+- `run-with-openclaw.mjs` wrapper 생성
+- 가능하면 `package.json`에 `openclaw:doctor`, `dev:with-gateway` script 추가
+- provider별 추가 인증 힌트 출력
+
+예:
+
+```bash
+agent-core openclaw init --project-dir ./apps/demo --provider openai-codex
+agent-core openclaw init --provider openai-api-key --api-key sk-...
+agent-core openclaw doctor --project-dir ./apps/demo
+```
+
+programmatic helper가 필요하면 `@zootopiafresh/agent-core/openclaw`에서 아래를 쓸 수 있습니다.
+
+- `setupOpenClawProject`
+- `doctorOpenClawProject`
+- `getOpenClawProviderMetadata`
+- `generateOpenClawSecret`
+
 ## 핵심 개념
 
 ### Runtime
@@ -130,6 +169,10 @@ OPENCLAW_AGENT_ID=main
 - `createOpenClawTransport`
 - `createOpenClawRunner`
 - `resolveOpenClawRunnerConfig`
+- `setupOpenClawProject`
+- `doctorOpenClawProject`
+- `getOpenClawProviderMetadata`
+- `generateOpenClawSecret`
 
 ### `@zootopiafresh/agent-core/testing`
 

@@ -10,10 +10,23 @@ export {
 export {
   createOpenClawTransport,
 } from './transport-openclaw';
+export {
+  doctorOpenClawProject,
+  generateOpenClawSecret,
+  getOpenClawProviderMetadata,
+  setupOpenClawProject,
+} from './openclaw-setup';
 export type {
   OpenClawCallOptions,
   OpenClawConfig,
   OpenClawMessage,
   OpenClawResponse,
 } from './openclaw-client';
-
+export type {
+  OpenClawDoctorCheck,
+  OpenClawDoctorResult,
+  OpenClawProviderMetadata,
+  OpenClawProviderMode,
+  OpenClawSetupOptions,
+  OpenClawSetupResult,
+} from './openclaw-setup';
