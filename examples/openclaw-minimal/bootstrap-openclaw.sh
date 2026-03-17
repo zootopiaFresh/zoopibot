@@ -1,0 +1,52 @@
+#!/bin/bash
+set -euo pipefail
+
+EXAMPLE_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$EXAMPLE_DIR/../.." && pwd)"
+PUBLIC_LIB="$REPO_DIR/scripts/lib/openclaw-public.sh"
+OPENCLAW_DIR="${OPENCLAW_DIR:-$HOME/.openclaw-example}"
+WORKSPACE_DIR="$OPENCLAW_DIR/workspace"
+SKILLS_DIR="$WORKSPACE_DIR/skills"
+CONFIG_FILE="$OPENCLAW_DIR/openclaw.json"
+ENV_FILE="${ENV_FILE:-$EXAMPLE_DIR/.env.example}"
+
+# shellcheck disable=SC1090
+source "$PUBLIC_LIB"
+
+APP_URL="${APP_URL:-http://localhost:3000}"
+APP_SERVICE_TOKEN="${APP_SERVICE_TOKEN:-$(generate_secret 16)}"
+OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
+OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-$(generate_secret 16)}"
+OPENCLAW_PRIMARY_MODEL="${OPENCLAW_PRIMARY_MODEL:-openai/gpt-5.4}"
+OPENCLAW_PROJECT_SKILL_NAME="demo-api"
+OPENCLAW_PROJECT_SKILL_SOURCE_DIR="$EXAMPLE_DIR/openclaw/skills/$OPENCLAW_PROJECT_SKILL_NAME"
+OPENCLAW_PROJECT_URL_ENV_NAME="APP_URL"
+OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME="APP_SERVICE_TOKEN"
+
+mkdir -p "$SKILLS_DIR"
+
+install_openclaw_skill \
+  "$OPENCLAW_PROJECT_SKILL_SOURCE_DIR" \
+  "$SKILLS_DIR" \
+  "$OPENCLAW_PROJECT_SKILL_NAME"
+
+SKILL_ENTRY_JSON="$(build_openclaw_skill_entry_json \
+  "$OPENCLAW_PROJECT_SKILL_NAME" \
+  "${OPENCLAW_PROJECT_URL_ENV_NAME}=${APP_URL}" \
+  "${OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME}=${APP_SERVICE_TOKEN}")"
+
+write_openclaw_config \
+  "$CONFIG_FILE" \
+  "$WORKSPACE_DIR" \
+  "$OPENCLAW_PRIMARY_MODEL" \
+  "$OPENCLAW_GATEWAY_PORT" \
+  "$OPENCLAW_GATEWAY_TOKEN" \
+  "$SKILL_ENTRY_JSON"
+
+cat <<EOF
+[openclaw-minimal] wrote config: $CONFIG_FILE
+[openclaw-minimal] skill: $OPENCLAW_PROJECT_SKILL_NAME
+[openclaw-minimal] app url env: $OPENCLAW_PROJECT_URL_ENV_NAME=$APP_URL
+[openclaw-minimal] service token env: $OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME=$APP_SERVICE_TOKEN
+[openclaw-minimal] example env file: $ENV_FILE
+EOF

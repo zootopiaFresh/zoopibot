@@ -13,6 +13,11 @@ export interface AIRunOptions {
   timeout?: number;
 }
 
+export type AIRunner = (
+  prompt: string,
+  options?: string | AIRunOptions
+) => Promise<string>;
+
 function normalizeAIRunOptions(
   sessionKeyOrOptions?: string | AIRunOptions
 ): AIRunOptions {

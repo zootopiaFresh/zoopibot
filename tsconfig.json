@@ -18,7 +18,10 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@zootopiafresh/agent-core": ["./packages/agent-core/src/index.ts"],
+      "@zootopiafresh/agent-core/openclaw": ["./packages/agent-core/src/openclaw.ts"],
+      "@zootopiafresh/agent-core/testing": ["./packages/agent-core/src/testing.ts"]
     }
   },
   "ts-node": {

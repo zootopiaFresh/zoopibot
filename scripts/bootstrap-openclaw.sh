@@ -8,6 +8,10 @@ OPENCLAW_DIR="${OPENCLAW_DIR:-$HOME/.openclaw}"
 WORKSPACE_DIR="$OPENCLAW_DIR/workspace"
 SKILLS_DIR="$WORKSPACE_DIR/skills"
 CONFIG_FILE="$OPENCLAW_DIR/openclaw.json"
+COMMON_LIB="$PROJECT_DIR/scripts/lib/openclaw-public.sh"
+
+# shellcheck disable=SC1090
+source "$COMMON_LIB"
 
 log() {
   echo "[bootstrap-openclaw] $1"
@@ -18,37 +22,8 @@ fail() {
   exit 1
 }
 
-generate_secret() {
-  if command -v openssl >/dev/null 2>&1; then
-    openssl rand -hex 32
-  elif command -v node >/dev/null 2>&1; then
-    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-  else
-    date +%s | sha256sum | cut -d' ' -f1
-  fi
-}
-
 upsert_env() {
-  local key="$1"
-  local value="$2"
-  local tmp
-  tmp="$(mktemp)"
-  touch "$ENV_FILE"
-  awk -v key="$key" -v value="$value" '
-    BEGIN { done = 0 }
-    index($0, key "=") == 1 {
-      print key "=\"" value "\""
-      done = 1
-      next
-    }
-    { print }
-    END {
-      if (!done) {
-        print key "=\"" value "\""
-      }
-    }
-  ' "$ENV_FILE" > "$tmp"
-  mv "$tmp" "$ENV_FILE"
+  upsert_env_file "$ENV_FILE" "$1" "$2"
 }
 
 require_var() {
@@ -63,16 +38,22 @@ if [ -f "$ENV_FILE" ]; then
   source "$ENV_FILE"
 fi
 
+OPENCLAW_PROJECT_SERVICE_TOKEN="${OPENCLAW_PROJECT_SERVICE_TOKEN:-${!OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME:-}}"
+
 AI_BACKEND="${AI_BACKEND:-openclaw}"
 OPENCLAW_PROVIDER_MODE="${OPENCLAW_PROVIDER_MODE:-openai-api-key}"
 OPENCLAW_URL="${OPENCLAW_URL:-http://127.0.0.1:18789}"
 OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
 OPENCLAW_PRIMARY_MODEL="${OPENCLAW_PRIMARY_MODEL:-}"
-ZOOPIBOT_SERVICE_TOKEN="${ZOOPIBOT_SERVICE_TOKEN:-}"
-ZOOPIBOT_PUBLIC_URL="${ZOOPIBOT_PUBLIC_URL:-${NEXTAUTH_URL:-http://localhost:3000}}"
 OPENCLAW_AGENT_WORKSPACE="${OPENCLAW_AGENT_WORKSPACE:-$WORKSPACE_DIR}"
 INSTALL_OPENCLAW="${INSTALL_OPENCLAW:-1}"
+OPENCLAW_PROJECT_SKILL_NAME="${OPENCLAW_PROJECT_SKILL_NAME:-zoopibot-query}"
+OPENCLAW_PROJECT_SKILL_SOURCE_DIR="${OPENCLAW_PROJECT_SKILL_SOURCE_DIR:-$PROJECT_DIR/openclaw/skills/$OPENCLAW_PROJECT_SKILL_NAME}"
+OPENCLAW_PROJECT_URL_ENV_NAME="${OPENCLAW_PROJECT_URL_ENV_NAME:-ZOOPIBOT_URL}"
+OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME="${OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME:-ZOOPIBOT_SERVICE_TOKEN}"
+OPENCLAW_PROJECT_PUBLIC_URL="${OPENCLAW_PROJECT_PUBLIC_URL:-${ZOOPIBOT_PUBLIC_URL:-${NEXTAUTH_URL:-http://localhost:3000}}}"
+OPENCLAW_PROJECT_SERVICE_TOKEN="${OPENCLAW_PROJECT_SERVICE_TOKEN:-${ZOOPIBOT_SERVICE_TOKEN:-}}"
 
 if [ "$AI_BACKEND" != "openclaw" ]; then
   fail "이 스크립트는 AI_BACKEND=openclaw 환경에서만 사용합니다."
@@ -93,108 +74,65 @@ if [ -z "$OPENCLAW_GATEWAY_TOKEN" ]; then
   log "OPENCLAW_GATEWAY_TOKEN이 없어 새 값을 생성해 .env에 저장했습니다."
 fi
 
-if [ -z "$ZOOPIBOT_SERVICE_TOKEN" ]; then
-  ZOOPIBOT_SERVICE_TOKEN="$(generate_secret)"
-  upsert_env ZOOPIBOT_SERVICE_TOKEN "$ZOOPIBOT_SERVICE_TOKEN"
-  log "ZOOPIBOT_SERVICE_TOKEN이 없어 새 값을 생성해 .env에 저장했습니다."
+if [ -z "$OPENCLAW_PROJECT_SERVICE_TOKEN" ]; then
+  OPENCLAW_PROJECT_SERVICE_TOKEN="$(generate_secret)"
+  upsert_env "$OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME" "$OPENCLAW_PROJECT_SERVICE_TOKEN"
+  log "$OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME 값이 없어 새 값을 생성해 .env에 저장했습니다."
 fi
 
 upsert_env AI_BACKEND "$AI_BACKEND"
 upsert_env OPENCLAW_URL "$OPENCLAW_URL"
 upsert_env OPENCLAW_PROVIDER_MODE "$OPENCLAW_PROVIDER_MODE"
 
-case "$OPENCLAW_PROVIDER_MODE" in
-  openai-api-key)
-    require_var OPENAI_API_KEY
-    if [ -z "$OPENCLAW_PRIMARY_MODEL" ]; then
-      OPENCLAW_PRIMARY_MODEL="openai/gpt-5.4"
-    fi
-    upsert_env OPENCLAW_PRIMARY_MODEL "$OPENCLAW_PRIMARY_MODEL"
-    ENV_BLOCK=$(cat <<EOF
-  "env": {
-    "OPENAI_API_KEY": "${OPENAI_API_KEY}"
-  },
+if ! openclaw_provider_metadata "$OPENCLAW_PROVIDER_MODE" "$OPENCLAW_CMD"; then
+  fail "지원하지 않는 OPENCLAW_PROVIDER_MODE=${OPENCLAW_PROVIDER_MODE}"
+fi
 
-EOF
-)
-    AUTH_HINT=""
-    ;;
-  openai-codex)
-    if [ -z "$OPENCLAW_PRIMARY_MODEL" ]; then
-      OPENCLAW_PRIMARY_MODEL="openai-codex/gpt-5.4"
-    fi
-    upsert_env OPENCLAW_PRIMARY_MODEL "$OPENCLAW_PRIMARY_MODEL"
-    ENV_BLOCK=""
-    AUTH_HINT="$OPENCLAW_CMD models auth login --provider openai-codex"
-    ;;
-  anthropic-api-key)
-    require_var ANTHROPIC_API_KEY
-    if [ -z "$OPENCLAW_PRIMARY_MODEL" ]; then
-      fail "anthropic-api-key 모드에서는 OPENCLAW_PRIMARY_MODEL도 지정해주세요. 예: anthropic/claude-opus-4-1"
-    fi
-    upsert_env OPENCLAW_PRIMARY_MODEL "$OPENCLAW_PRIMARY_MODEL"
-    ENV_BLOCK=$(cat <<EOF
-  "env": {
-    "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
-  },
+AUTH_HINT="$OPENCLAW_PROVIDER_AUTH_HINT"
 
-EOF
-)
-    AUTH_HINT=""
-    ;;
-  *)
-    fail "지원하지 않는 OPENCLAW_PROVIDER_MODE=${OPENCLAW_PROVIDER_MODE}"
-    ;;
-esac
+if [ -z "$OPENCLAW_PRIMARY_MODEL" ] && [ -n "$OPENCLAW_PROVIDER_DEFAULT_MODEL" ]; then
+  OPENCLAW_PRIMARY_MODEL="$OPENCLAW_PROVIDER_DEFAULT_MODEL"
+fi
+
+if [ -z "$OPENCLAW_PRIMARY_MODEL" ]; then
+  fail "OPENCLAW_PRIMARY_MODEL도 지정해주세요. 예: anthropic/claude-opus-4-1"
+fi
+
+if [ -n "$OPENCLAW_PROVIDER_INLINE_ENV_KEY" ]; then
+  require_var "$OPENCLAW_PROVIDER_INLINE_ENV_KEY"
+fi
+
+upsert_env OPENCLAW_PRIMARY_MODEL "$OPENCLAW_PRIMARY_MODEL"
 
 mkdir -p "$SKILLS_DIR" "$WORKSPACE_DIR"
 
-if [ -d "$PROJECT_DIR/openclaw/skills/zoopibot-query" ]; then
-  rm -rf "$SKILLS_DIR/zoopibot-query"
-  cp -R "$PROJECT_DIR/openclaw/skills/zoopibot-query" "$SKILLS_DIR/"
-  log "zoopibot-query 스킬을 복사했습니다."
+if install_openclaw_skill "$OPENCLAW_PROJECT_SKILL_SOURCE_DIR" "$SKILLS_DIR" "$OPENCLAW_PROJECT_SKILL_NAME"; then
+  log "$OPENCLAW_PROJECT_SKILL_NAME 스킬을 복사했습니다."
 fi
 
-cat > "$CONFIG_FILE" <<EOF
-{
-  "\$schema": "https://openclaw.ai/schema/openclaw.json",
+PROVIDER_ENV_KEY=""
+PROVIDER_ENV_VALUE=""
+SKILL_ENTRY_JSON=""
 
-${ENV_BLOCK}
-  "agents": {
-    "defaults": {
-      "workspace": "${OPENCLAW_AGENT_WORKSPACE}",
-      "model": {
-        "primary": "${OPENCLAW_PRIMARY_MODEL}"
-      }
-    }
-  },
+if [ -n "$OPENCLAW_PROVIDER_INLINE_ENV_KEY" ]; then
+  PROVIDER_ENV_KEY="$OPENCLAW_PROVIDER_INLINE_ENV_KEY"
+  PROVIDER_ENV_VALUE="${!OPENCLAW_PROVIDER_INLINE_ENV_KEY}"
+fi
 
-  "gateway": {
-    "mode": "local",
-    "port": ${OPENCLAW_GATEWAY_PORT},
-    "auth": {
-      "token": "${OPENCLAW_GATEWAY_TOKEN}"
-    },
-    "http": {
-      "endpoints": {
-        "chatCompletions": { "enabled": true }
-      }
-    }
-  },
+SKILL_ENTRY_JSON="$(build_openclaw_skill_entry_json \
+  "$OPENCLAW_PROJECT_SKILL_NAME" \
+  "${OPENCLAW_PROJECT_URL_ENV_NAME}=${OPENCLAW_PROJECT_PUBLIC_URL}" \
+  "${OPENCLAW_PROJECT_SERVICE_TOKEN_ENV_NAME}=${OPENCLAW_PROJECT_SERVICE_TOKEN}")"
 
-  "skills": {
-    "entries": {
-      "zoopibot-query": {
-        "enabled": true,
-        "env": {
-          "ZOOPIBOT_URL": "${ZOOPIBOT_PUBLIC_URL}",
-          "ZOOPIBOT_SERVICE_TOKEN": "${ZOOPIBOT_SERVICE_TOKEN}"
-        }
-      }
-    }
-  }
-}
-EOF
+write_openclaw_config \
+  "$CONFIG_FILE" \
+  "$OPENCLAW_AGENT_WORKSPACE" \
+  "$OPENCLAW_PRIMARY_MODEL" \
+  "$OPENCLAW_GATEWAY_PORT" \
+  "$OPENCLAW_GATEWAY_TOKEN" \
+  "$SKILL_ENTRY_JSON" \
+  "$PROVIDER_ENV_KEY" \
+  "$PROVIDER_ENV_VALUE"
 
 log "OpenClaw 설정 파일을 생성했습니다: $CONFIG_FILE"
 log "Provider mode: $OPENCLAW_PROVIDER_MODE"
