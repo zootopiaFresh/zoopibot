@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  BUILTIN_STEP_KINDS,
   createSpecResolver,
   createStaticRequirementProvider,
   StaticAgentRegistry,
   StaticToolRegistry,
 } from '@/lib/conversation/registry';
 import { zoopibotQueryAgentSpec } from '@/lib/conversation/agents/zoopibot-query';
+import { ZOOPIBOT_QUERY_STEP_KINDS } from '@/lib/conversation/zoopibot-query-step-handlers';
 
 test('spec resolver merges requirement overrides into default agent spec', async () => {
   const agentRegistry = new StaticAgentRegistry([zoopibotQueryAgentSpec]);
@@ -23,6 +25,7 @@ test('spec resolver merges requirement overrides into default agent spec', async
   const specResolver = createSpecResolver({
     agentRegistry,
     toolRegistry,
+    supportedStepKinds: [...Array.from(BUILTIN_STEP_KINDS), ...ZOOPIBOT_QUERY_STEP_KINDS],
     requirementProvider: createStaticRequirementProvider({
       'zoopibot-query:strict': {
         id: 'strict',
@@ -58,6 +61,7 @@ test('spec resolver rejects unknown tools from overrides', async () => {
   const specResolver = createSpecResolver({
     agentRegistry,
     toolRegistry,
+    supportedStepKinds: [...Array.from(BUILTIN_STEP_KINDS), ...ZOOPIBOT_QUERY_STEP_KINDS],
     requirementProvider: createStaticRequirementProvider({
       'zoopibot-query:broken': {
         id: 'broken',

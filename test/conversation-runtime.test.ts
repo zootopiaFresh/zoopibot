@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { createConversationRuntime } from '@/lib/conversation/runtime';
 import {
+  BUILTIN_STEP_KINDS,
   createSpecResolver,
   StaticAgentRegistry,
   StaticToolRegistry,
@@ -10,6 +11,16 @@ import {
 import { createMemoryConversationStore } from '@/lib/conversation/store-memory';
 import { zoopibotQueryAgentSpec } from '@/lib/conversation/agents/zoopibot-query';
 import type { ConversationEvent, EventSink, TransportAdapter } from '@/lib/conversation/types';
+import {
+  createZoopibotQueryStepHandlers,
+  ZOOPIBOT_QUERY_STEP_KINDS,
+} from '@/lib/conversation/zoopibot-query-step-handlers';
+import {
+  readZoopibotPresentation,
+  readZoopibotResultSnapshot,
+  readZoopibotSql,
+  readZoopibotValidation,
+} from '@/lib/conversation/zoopibot-result';
 
 function createEventCollector() {
   const events: ConversationEvent[] = [];
@@ -69,6 +80,7 @@ test('conversation runtime starts a run immediately and completes it in backgrou
   const specResolver = createSpecResolver({
     agentRegistry,
     toolRegistry,
+    supportedStepKinds: [...Array.from(BUILTIN_STEP_KINDS), ...ZOOPIBOT_QUERY_STEP_KINDS],
   });
   const eventCollector = createEventCollector();
   const runtime = createConversationRuntime({
@@ -78,6 +90,7 @@ test('conversation runtime starts a run immediately and completes it in backgrou
     agentRegistry,
     specResolver,
     eventSink: eventCollector.sink,
+    stepHandlers: createZoopibotQueryStepHandlers(),
     capabilities: {
       async resolveSchema() {
         return {
@@ -140,10 +153,10 @@ test('conversation runtime starts a run immediately and completes it in backgrou
   assert.equal(run?.status, 'completed');
   assert.equal(outputMessage?.status, 'completed');
   assert.equal(outputMessage?.content, '테스트 설명입니다.');
-  assert.equal(outputMessage?.result?.sql, 'SELECT 1 AS value');
-  assert.equal(outputMessage?.result?.presentation?.kind, 'presentation');
-  assert.equal(outputMessage?.result?.resultSnapshot?.kind, 'resultSnapshot');
-  assert.equal(outputMessage?.result?.validation?.validated, true);
+  assert.equal(readZoopibotSql(outputMessage?.result), 'SELECT 1 AS value');
+  assert.equal(readZoopibotPresentation(outputMessage?.result)?.title, '테스트');
+  assert.equal(readZoopibotResultSnapshot(outputMessage?.result)?.totalRows, 1);
+  assert.equal(readZoopibotValidation(outputMessage?.result)?.validated, true);
 
   assert.ok(eventCollector.events.some((event) => event.type === 'message.created'));
   assert.ok(eventCollector.events.some((event) => event.type === 'message.completed'));

@@ -11,7 +11,7 @@ const silentLogger = {
 };
 
 test('getOpenClawConfigFromEnv returns defaults when env is empty', () => {
-  const config = getOpenClawConfigFromEnv({});
+  const config = getOpenClawConfigFromEnv({} as NodeJS.ProcessEnv);
 
   assert.deepEqual(config, {
     baseUrl: 'http://127.0.0.1:18789',
@@ -33,7 +33,7 @@ test('OpenClaw client sends expected request shape and returns content', async (
       agentId: 'agent-main',
     },
     {
-      fetchImpl: async (input, init) => {
+      fetchImpl: async (input: string | URL | Request, init?: RequestInit) => {
         requestUrl = String(input);
         requestInit = init;
 

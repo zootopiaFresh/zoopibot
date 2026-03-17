@@ -1,4 +1,4 @@
-import type { AgentSpec } from '@/lib/conversation/types';
+import type { AgentSpec } from '@zootopiafresh/agent-core';
 
 export const zoopibotQueryAgentSpec: AgentSpec = {
   id: 'zoopibot-query',
@@ -12,10 +12,8 @@ export const zoopibotQueryAgentSpec: AgentSpec = {
       maxQueryExecutionRecoveryAttempts: 2,
     },
     outputContract: {
-      includeSql: true,
-      includePresentation: true,
-      includeResultSnapshot: true,
-      includeValidation: true,
+      includeArtifacts: ['sql', 'presentation', 'resultSnapshot', 'validation'],
+      includeMeta: true,
     },
     promptRules: {
       plannerAppendix: [],

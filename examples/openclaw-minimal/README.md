@@ -33,6 +33,13 @@ OPENCLAW_GATEWAY_TOKEN=...
 OPENCLAW_AGENT_ID=main
 ```
 
+토큰 설명:
+
+- `OPENCLAW_GATEWAY_TOKEN`은 Gateway HTTP 인증 토큰입니다.
+- Gateway가 인증을 요구하는데 이 값이 비어 있거나 다르면 `401 Unauthorized`가 납니다.
+- 이 저장소에서 이미 OpenClaw를 세팅했다면 [/Users/donghwan/zoopibot/.env](/Users/donghwan/zoopibot/.env)의 `OPENCLAW_GATEWAY_TOKEN`을 그대로 써도 됩니다.
+- 새로 세팅해야 하면 [/Users/donghwan/zoopibot/scripts/setup-openclaw.sh](/Users/donghwan/zoopibot/scripts/setup-openclaw.sh) 또는 [/Users/donghwan/zoopibot/scripts/bootstrap-openclaw.sh](/Users/donghwan/zoopibot/scripts/bootstrap-openclaw.sh)을 먼저 실행하는 편이 가장 빠릅니다.
+
 ### 2. 앱과 Gateway를 같이 실행
 
 ```bash

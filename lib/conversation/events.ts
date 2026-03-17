@@ -1,42 +1,18 @@
-import { EventEmitter } from 'events';
-
 import { emitChatSessionEvent } from '@/lib/chat-events';
 import { serializeConversationMessage } from '@/lib/conversation/legacy-message';
-import type { ConversationEvent, EventSink } from '@/lib/conversation/types';
+import {
+  ConversationEventHub,
+  createConversationEventSink,
+  type ConversationEvent,
+  type EventSink,
+} from '@zootopiafresh/agent-core';
 
-export class ConversationEventHub {
-  private readonly emitter = new EventEmitter();
-
-  constructor() {
-    this.emitter.setMaxListeners(100);
-  }
-
-  emit(event: ConversationEvent) {
-    this.emitter.emit(`thread:${event.threadId}`, event);
-  }
-
-  subscribe(threadId: string, listener: (event: ConversationEvent) => void) {
-    const channel = `thread:${threadId}`;
-    this.emitter.on(channel, listener);
-    return () => {
-      this.emitter.off(channel, listener);
-    };
-  }
-}
-
-export function createConversationEventSink(
-  hub: ConversationEventHub,
-  sinks: EventSink[] = []
-): EventSink {
-  return {
-    async emit(event) {
-      hub.emit(event);
-      for (const sink of sinks) {
-        await sink.emit(event);
-      }
-    },
-  };
-}
+export {
+  ConversationEventHub,
+  createConversationEventSink,
+  type ConversationEvent,
+  type EventSink,
+};
 
 export function createZoopibotEventSink(): EventSink {
   return {

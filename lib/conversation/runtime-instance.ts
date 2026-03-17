@@ -4,16 +4,18 @@ import { buildPresentationFromQueryResult } from '@/lib/reporting';
 import { resolveSchemaContext } from '@/lib/schema-explorer';
 import { ConversationEventHub, createConversationEventSink, createZoopibotEventSink } from '@/lib/conversation/events';
 import { zoopibotQueryAgentSpec } from '@/lib/conversation/agents/zoopibot-query';
+import { createPrismaConversationStore } from '@/lib/conversation/store-prisma';
+import { createZoopibotQueryStepHandlers, ZOOPIBOT_QUERY_STEP_KINDS } from '@/lib/conversation/zoopibot-query-step-handlers';
+import { prisma } from '@/lib/db';
 import {
+  BUILTIN_STEP_KINDS,
+  createConversationRuntime,
   createJsonRequirementProvider,
   createSpecResolver,
   StaticAgentRegistry,
   StaticToolRegistry,
-} from '@/lib/conversation/registry';
-import { createPrismaConversationStore } from '@/lib/conversation/store-prisma';
-import { createOpenClawTransport } from '@/lib/conversation/transport-openclaw';
-import { createConversationRuntime } from '@/lib/conversation/runtime';
-import { prisma } from '@/lib/db';
+} from '@zootopiafresh/agent-core';
+import { createOpenClawTransport } from '@zootopiafresh/agent-core/openclaw';
 
 const globalConversation = globalThis as unknown as {
   conversationRuntime?: ReturnType<typeof createConversationRuntime>;
@@ -50,6 +52,7 @@ export function getConversationRuntime() {
     agentRegistry,
     toolRegistry,
     requirementProvider,
+    supportedStepKinds: [...Array.from(BUILTIN_STEP_KINDS), ...ZOOPIBOT_QUERY_STEP_KINDS],
   });
   const runtime = createConversationRuntime({
     transport: createOpenClawTransport(),
@@ -58,6 +61,7 @@ export function getConversationRuntime() {
     toolRegistry,
     specResolver,
     eventSink: createConversationEventSink(getConversationEventHub(), [createZoopibotEventSink()]),
+    stepHandlers: createZoopibotQueryStepHandlers(),
     capabilities: {
       async resolveSchema(input) {
         return resolveSchemaContext(

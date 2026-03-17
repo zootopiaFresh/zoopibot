@@ -202,21 +202,25 @@ API 키/Provider만 따로 바꾸려면:
 yarn dev
 ```
 
-### OpenClaw 공통 모듈 재사용
+### Agent Core 패키지
 
-Zoopibot 내부에서는 OpenClaw 관련 로직을 공통 entrypoint로 정리해두었습니다.
+Zoopibot 내부의 대화/에이전트 런타임은 workspace 패키지 [@zootopiafresh/agent-core](/Users/donghwan/zoopibot/packages/agent-core/README.md)로 정리되어 있습니다.
 
 공개 경로:
 
-- TypeScript client: [lib/openclaw-client.ts](lib/openclaw-client.ts)
-- TypeScript runner: [lib/openclaw-runner.mjs](lib/openclaw-runner.mjs)
-- Shell helper: [scripts/lib/openclaw-public.sh](scripts/lib/openclaw-public.sh)
+- 패키지 루트: [packages/agent-core](/Users/donghwan/zoopibot/packages/agent-core)
+- OpenClaw client 호환 entrypoint: [lib/openclaw-client.ts](/Users/donghwan/zoopibot/lib/openclaw-client.ts)
+- OpenClaw runner 호환 entrypoint: [lib/openclaw-runner.mjs](/Users/donghwan/zoopibot/lib/openclaw-runner.mjs)
+- Shell helper: [scripts/lib/openclaw-public.sh](/Users/donghwan/zoopibot/scripts/lib/openclaw-public.sh)
 
 관련 문서:
 
-- 공개 계약: [openclaw-public-contract.md](docs/openclaw-public-contract.md)
-- 모듈화 TODO: [openclaw-modularization-todo.md](docs/openclaw-modularization-todo.md)
-- 최소 예제: [examples/openclaw-minimal/README.md](examples/openclaw-minimal/README.md)
+- 패키지 문서: [packages/agent-core/README.md](/Users/donghwan/zoopibot/packages/agent-core/README.md)
+- 릴리즈 가이드: [docs/agent-core-release.md](/Users/donghwan/zoopibot/docs/agent-core-release.md)
+- 공개 계약: [openclaw-public-contract.md](/Users/donghwan/zoopibot/docs/openclaw-public-contract.md)
+- 모듈화 TODO: [openclaw-modularization-todo.md](/Users/donghwan/zoopibot/docs/openclaw-modularization-todo.md)
+- 최소 OpenClaw 예제: [examples/openclaw-minimal/README.md](/Users/donghwan/zoopibot/examples/openclaw-minimal/README.md)
+- 토이 소비 예제: [playgrounds/moonwave-counselor/README.md](/Users/donghwan/zoopibot/playgrounds/moonwave-counselor/README.md)
 
 선택적 live smoke test:
 

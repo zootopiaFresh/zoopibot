@@ -1,4 +1,15 @@
 import type { PrismaClient } from '@prisma/client';
+import type {
+  BeginRunInput,
+  ConversationMessage,
+  ConversationMessageResult,
+  ConversationRun,
+  ConversationRunAck,
+  ConversationState,
+  ConversationStore,
+  ConversationThread,
+  WorkflowCheckpoint,
+} from '@zootopiafresh/agent-core';
 
 import {
   parseStoredPresentation,
@@ -6,17 +17,13 @@ import {
   serializePresentation,
   serializeQueryResult,
 } from '@/lib/presentation';
-import type {
-  BeginRunInput,
-  ConversationMessage,
-  ConversationResultEnvelope,
-  ConversationRun,
-  ConversationRunAck,
-  ConversationState,
-  ConversationStore,
-  ConversationThread,
-  WorkflowCheckpoint,
-} from '@/lib/conversation/types';
+import {
+  buildZoopibotMessageResult,
+  readZoopibotPresentation,
+  readZoopibotResultSnapshot,
+  readZoopibotSql,
+  readZoopibotValidation,
+} from '@/lib/conversation/zoopibot-result';
 
 function parseJsonRecord(raw?: string | null): Record<string, unknown> | null {
   if (!raw) {
@@ -65,7 +72,7 @@ function toConversationRun(run: any): ConversationRun {
   };
 }
 
-function toConversationResultEnvelope(message: any): ConversationResultEnvelope | null {
+function toConversationResultEnvelope(message: any): ConversationMessageResult | null {
   const presentation = parseStoredPresentation(message.presentation);
   const resultSnapshot = parseStoredQueryResult(message.resultSnapshot);
 
@@ -81,27 +88,21 @@ function toConversationResultEnvelope(message: any): ConversationResultEnvelope 
     return null;
   }
 
-  return {
+  return buildZoopibotMessageResult({
+    outputContract: {
+      includeArtifacts: ['sql', 'presentation', 'resultSnapshot', 'validation'],
+      includeMeta: true,
+    },
     sql: message.sql ?? null,
-    presentation: presentation
-      ? {
-          kind: 'presentation',
-          data: presentation,
-        }
-      : null,
-    resultSnapshot: resultSnapshot
-      ? {
-          kind: 'resultSnapshot',
-          data: resultSnapshot,
-        }
-      : null,
+    presentation,
+    resultSnapshot,
     validation: {
       validated: message.validated ?? null,
       mode: message.validationMode ?? null,
       error: message.validationError ?? null,
       attempts: message.validationAttempts ?? null,
     },
-  };
+  });
 }
 
 function toConversationMessage(message: any): ConversationMessage {
@@ -132,13 +133,14 @@ function buildMessageUpdateData(patch: Partial<ConversationMessage>) {
   if (patch.completedAt !== undefined) data.completedAt = patch.completedAt ? new Date(patch.completedAt) : null;
 
   if (patch.result !== undefined) {
-    data.sql = patch.result?.sql ?? null;
-    data.presentation = serializePresentation(patch.result?.presentation?.data ?? null);
-    data.resultSnapshot = serializeQueryResult(patch.result?.resultSnapshot?.data ?? null);
-    data.validated = patch.result?.validation?.validated ?? null;
-    data.validationMode = patch.result?.validation?.mode ?? null;
-    data.validationError = patch.result?.validation?.error ?? null;
-    data.validationAttempts = patch.result?.validation?.attempts ?? null;
+    const validation = readZoopibotValidation(patch.result);
+    data.sql = readZoopibotSql(patch.result);
+    data.presentation = serializePresentation(readZoopibotPresentation(patch.result));
+    data.resultSnapshot = serializeQueryResult(readZoopibotResultSnapshot(patch.result));
+    data.validated = validation?.validated ?? null;
+    data.validationMode = validation?.mode ?? null;
+    data.validationError = validation?.error ?? null;
+    data.validationAttempts = validation?.attempts ?? null;
   }
 
   return data;

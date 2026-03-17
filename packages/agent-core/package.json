@@ -1,0 +1,54 @@
+{
+  "name": "@zootopiafresh/agent-core",
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./openclaw": {
+      "types": "./dist/openclaw.d.ts",
+      "import": "./dist/openclaw.js",
+      "require": "./dist/openclaw.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zootopiaFresh/zoopibot.git",
+    "directory": "packages/agent-core"
+  },
+  "homepage": "https://github.com/zootopiaFresh/zoopibot/tree/main/packages/agent-core",
+  "bugs": {
+    "url": "https://github.com/zootopiaFresh/zoopibot/issues"
+  },
+  "scripts": {
+    "build": "tsup",
+    "prepare": "tsup"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.6.3"
+  }
+}
