@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,6 +23,7 @@ test('setupOpenClawProject writes env files, wrapper, and package scripts', asyn
         private: true,
         scripts: {
           dev: 'node server.js',
+          start: 'node prod.js',
         },
       },
       null,
@@ -45,11 +47,15 @@ test('setupOpenClawProject writes env files, wrapper, and package scripts', asyn
   };
 
   assert.match(envContent, /OPENCLAW_URL="http:\/\/127\.0\.0\.1:18789"/);
+  assert.match(envContent, /OPENCLAW_GATEWAY_HOST="127\.0\.0\.1"/);
+  assert.match(envContent, /OPENCLAW_GATEWAY_PORT="18789"/);
   assert.match(envContent, /OPENCLAW_GATEWAY_TOKEN="/);
   assert.match(envContent, /OPENCLAW_AGENT_ID="main"/);
   assert.match(envContent, /OPENCLAW_PROVIDER_MODE="openai-api-key"/);
   assert.match(envContent, /OPENAI_API_KEY="sk-test"/);
 
+  assert.match(envExampleContent, /OPENCLAW_GATEWAY_HOST=127\.0\.0\.1/);
+  assert.match(envExampleContent, /OPENCLAW_GATEWAY_PORT=18789/);
   assert.match(envExampleContent, /OPENCLAW_GATEWAY_TOKEN=$/m);
   assert.match(envExampleContent, /OPENAI_API_KEY=$/m);
 
@@ -60,6 +66,10 @@ test('setupOpenClawProject writes env files, wrapper, and package scripts', asyn
   assert.equal(
     packageJson.scripts['dev:with-gateway'],
     'node --env-file=.env ./run-with-openclaw.mjs npm run dev'
+  );
+  assert.equal(
+    packageJson.scripts['start:with-gateway'],
+    'node --env-file=.env ./run-with-openclaw.mjs npm run start'
   );
 
   assert.equal(result.provider, 'openai-api-key');
@@ -114,9 +124,64 @@ test('doctorOpenClawProject reports healthy local setup shape', async () => {
   assert.equal(find('openclaw-cmd')?.status, 'ok');
   assert.equal(find('env-file')?.status, 'ok');
   assert.equal(find('OPENCLAW_URL')?.status, 'ok');
+  assert.equal(find('OPENCLAW_GATEWAY_HOST')?.status, 'warn');
+  assert.equal(find('OPENCLAW_GATEWAY_PORT')?.status, 'warn');
   assert.equal(find('OPENCLAW_GATEWAY_TOKEN')?.status, 'ok');
   assert.equal(find('OPENAI_API_KEY')?.status, 'ok');
   assert.equal(find('wrapper-file')?.status, 'ok');
+});
+
+test('doctorOpenClawProject reports unauthorized gateway token mismatch', async () => {
+  const projectDir = await mkdtemp(path.join(os.tmpdir(), 'agent-core-openclaw-doctor-auth-'));
+  const gateway = createServer(async (_request, response) => {
+    response.writeHead(401, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({ error: { message: 'Unauthorized' } }));
+  });
+
+  await new Promise<void>((resolve) => {
+    gateway.listen(0, '127.0.0.1', () => resolve());
+  });
+
+  try {
+    const address = gateway.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('gateway port를 찾지 못했습니다.');
+    }
+
+    await writeFile(
+      path.join(projectDir, '.env'),
+      [
+        `OPENCLAW_URL="http://127.0.0.1:${address.port}"`,
+        'OPENCLAW_GATEWAY_HOST="127.0.0.1"',
+        `OPENCLAW_GATEWAY_PORT="${address.port}"`,
+        'OPENCLAW_GATEWAY_TOKEN="wrong-token"',
+        'OPENCLAW_AGENT_ID="main"',
+        'OPENCLAW_PROVIDER_MODE="openai-api-key"',
+        'OPENAI_API_KEY="sk-test"',
+      ].join('\n') + '\n',
+      'utf-8'
+    );
+
+    const result = await doctorOpenClawProject({
+      projectDir,
+      openclawCmd: 'node',
+    });
+
+    const gatewayHealth = result.checks.find((check) => check.id === 'gateway-health');
+    assert.equal(result.ok, false);
+    assert.equal(gatewayHealth?.status, 'fail');
+    assert.match(gatewayHealth?.message || '', /OPENCLAW_GATEWAY_TOKEN/);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      gateway.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
 });
 
 test('getOpenClawProviderMetadata exposes inline env and auth hints', () => {

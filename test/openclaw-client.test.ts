@@ -104,6 +104,26 @@ test('OpenClaw client surfaces gateway HTTP errors', async () => {
   );
 });
 
+test('OpenClaw client checkConnection classifies unauthorized responses', async () => {
+  const client = createOpenClawClient(
+    { baseUrl: 'http://gateway.local', token: 'wrong-token' },
+    {
+      fetchImpl: async () => new Response('invalid token', { status: 401 }),
+      logger: silentLogger,
+    }
+  );
+
+  const result = await client.checkConnection();
+
+  assert.deepEqual(result, {
+    ok: false,
+    code: 'unauthorized',
+    status: 401,
+    details: 'invalid token',
+    message: 'OpenClaw Gateway 인증에 실패했습니다. OPENCLAW_GATEWAY_TOKEN을 확인하세요. (401)',
+  });
+});
+
 test('OpenClaw client translates connection refused errors', async () => {
   const client = createOpenClawClient(
     { baseUrl: 'http://gateway.local' },
@@ -119,7 +139,9 @@ test('OpenClaw client translates connection refused errors', async () => {
 
   await assert.rejects(
     () => client.call('prompt'),
-    new Error('OpenClaw Gateway에 연결할 수 없습니다. `openclaw gateway` 명령으로 Gateway를 시작하세요.')
+    new Error(
+      'OpenClaw Gateway에 연결할 수 없습니다. `openclaw gateway run`으로 Gateway를 시작하거나 자동 기동 설정을 확인하세요.'
+    )
   );
 });
 
@@ -137,4 +159,27 @@ test('OpenClaw testConnection returns false on fetch failure', async () => {
   const ok = await client.testConnection();
 
   assert.equal(ok, false);
+});
+
+test('OpenClaw client checkConnection classifies connection refused errors', async () => {
+  const client = createOpenClawClient(
+    { baseUrl: 'http://gateway.local' },
+    {
+      fetchImpl: async () => {
+        throw Object.assign(new TypeError('fetch failed'), {
+          cause: { code: 'ECONNREFUSED' },
+        });
+      },
+      logger: silentLogger,
+    }
+  );
+
+  const result = await client.checkConnection();
+
+  assert.deepEqual(result, {
+    ok: false,
+    code: 'connection-refused',
+    message:
+      'OpenClaw Gateway에 연결할 수 없습니다. `openclaw gateway run`으로 Gateway를 시작하거나 자동 기동 설정을 확인하세요.',
+  });
 });

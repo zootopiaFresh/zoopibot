@@ -82,12 +82,17 @@ test("runner reuses existing gateway when port is already open", async () => {
       projectDir: "/workspace/app",
     },
     {
-      existsSync: () => true,
+      commandExists: () => false,
       exit: () => {
         throw new Error("exit should not be called");
       },
       isPortOpen: async () => true,
       logger,
+      verifyGateway: async () => ({
+        ok: true,
+        code: "ok",
+        message: "OpenClaw Gateway 응답을 확인했습니다.",
+      }),
       spawn: (command, args) => {
         spawns.push({ command, args });
         return new FakeChild(100);
@@ -122,7 +127,7 @@ test("runner starts gateway before app when port is closed", async () => {
       projectDir: "/workspace/app",
     },
     {
-      existsSync: () => true,
+      commandExists: () => true,
       exit: () => {
         throw new Error("exit should not be called");
       },
@@ -135,7 +140,11 @@ test("runner starts gateway before app when port is closed", async () => {
         spawns.push({ command, args });
         return new FakeChild(spawns.length);
       },
-      waitForPort: async () => true,
+      waitForGatewayReady: async () => ({
+        ok: true,
+        code: "ok",
+        message: "OpenClaw Gateway 응답을 확인했습니다.",
+      }),
     }
   );
 
@@ -145,7 +154,7 @@ test("runner starts gateway before app when port is closed", async () => {
   assert.equal(spawns.length, 2);
   assert.deepEqual(spawns[0], {
     command: "/tmp/openclaw-cli.sh",
-    args: ["gateway"],
+    args: ["gateway", "run", "--force", "--port", "18789"],
   });
   assert.deepEqual(spawns[1], {
     command: "yarn",
@@ -171,10 +180,11 @@ test("runner exits with code 1 when gateway binary is missing", async () => {
       projectDir: "/workspace/app",
     },
     {
-      existsSync: () => false,
+      commandExists: () => false,
       exit: (code) => {
         exitCodes.push(code);
       },
+      isPortOpen: async () => false,
       logger,
       spawn: () => new FakeChild(1),
     }
@@ -183,7 +193,69 @@ test("runner exits with code 1 when gateway binary is missing", async () => {
   await runner.start();
 
   assert.deepEqual(exitCodes, [1]);
-  assert.ok(errors.some((line) => line.includes("OpenClaw 실행 파일이 없습니다")));
+  assert.ok(errors.some((line) => line.includes("OpenClaw 실행 파일을 찾지 못했습니다")));
+});
+
+test("runner restarts gateway when occupied port fails current token check", async () => {
+  const { logger, logs } = createLogger();
+  const spawns = [];
+  let verifyCount = 0;
+
+  const runner = createOpenClawRunner(
+    {
+      appCommand: ["yarn", "dev:app"],
+      autoStart: true,
+      env: {
+        OPENCLAW_GATEWAY_TOKEN: "project-token",
+      },
+      gatewayCmd: "openclaw",
+      gatewayHost: "127.0.0.1",
+      gatewayPort: 18789,
+      projectDir: "/workspace/app",
+    },
+    {
+      commandExists: () => true,
+      exit: () => {
+        throw new Error("exit should not be called");
+      },
+      isPortOpen: async () => true,
+      logger,
+      spawn: (command, args) => {
+        spawns.push({ command, args });
+        return new FakeChild(spawns.length + 10);
+      },
+      verifyGateway: async () => {
+        verifyCount += 1;
+        if (verifyCount === 1) {
+          return {
+            ok: false,
+            code: "unauthorized",
+            message: "OpenClaw Gateway 인증에 실패했습니다. OPENCLAW_GATEWAY_TOKEN을 확인하세요. (401)",
+          };
+        }
+
+        return {
+          ok: true,
+          code: "ok",
+          message: "OpenClaw Gateway 응답을 확인했습니다.",
+        };
+      },
+      waitForGatewayReady: async () => ({
+        ok: true,
+        code: "ok",
+        message: "OpenClaw Gateway 응답을 확인했습니다.",
+      }),
+    }
+  );
+
+  await runner.start();
+
+  assert.equal(spawns.length, 2);
+  assert.deepEqual(spawns[0], {
+    command: "openclaw",
+    args: ["gateway", "run", "--force", "--port", "18789", "--token", "project-token"],
+  });
+  assert.ok(logs.some((line) => line.includes("기존 Gateway 응답이 현재 설정과 맞지 않아 재시작합니다")));
 });
 
 test("runner shuts down app with gateway exit code when owned gateway exits first", async () => {
@@ -203,7 +275,7 @@ test("runner shuts down app with gateway exit code when owned gateway exits firs
       projectDir: "/workspace/app",
     },
     {
-      existsSync: () => true,
+      commandExists: () => true,
       exit: (code) => {
         exitCodes.push(code);
       },
@@ -223,7 +295,11 @@ test("runner shuts down app with gateway exit code when owned gateway exits firs
         children.push(child);
         return child;
       },
-      waitForPort: async () => true,
+      waitForGatewayReady: async () => ({
+        ok: true,
+        code: "ok",
+        message: "OpenClaw Gateway 응답을 확인했습니다.",
+      }),
     }
   );
 

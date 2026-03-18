@@ -1,7 +1,9 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
-import { existsSync as nodeExistsSync } from 'node:fs';
 import net from 'node:net';
 import process from 'node:process';
+
+import { createOpenClawClient, type OpenClawConnectionCheckResult } from './openclaw-client';
+import { commandExists as defaultCommandExists } from './openclaw-command';
 
 export const signalExitCodes: Record<string, number> = {
   SIGHUP: 129,
@@ -28,9 +30,10 @@ export interface OpenClawRunnerConfig {
 
 interface RunnerDependencies {
   spawn?: typeof nodeSpawn;
-  existsSync?: typeof nodeExistsSync;
+  commandExists?: typeof defaultCommandExists;
   isPortOpen?: typeof defaultIsPortOpen;
-  waitForPort?: typeof defaultWaitForPort;
+  verifyGateway?: typeof defaultVerifyGateway;
+  waitForGatewayReady?: typeof defaultWaitForGatewayReady;
   kill?: typeof process.kill;
   exit?: typeof process.exit;
   logger?: Console;
@@ -81,6 +84,61 @@ async function defaultWaitForPort(
   return false;
 }
 
+async function defaultVerifyGateway(
+  config: OpenClawRunnerConfig
+): Promise<OpenClawConnectionCheckResult> {
+  const client = createOpenClawClient({
+    agentId: config.env.OPENCLAW_AGENT_ID || 'main',
+    baseUrl: `http://${config.gatewayHost}:${config.gatewayPort}`,
+    token: config.env.OPENCLAW_GATEWAY_TOKEN || '',
+  });
+
+  return client.checkConnection();
+}
+
+async function defaultWaitForGatewayReady(
+  config: OpenClawRunnerConfig,
+  timeoutMs: number,
+  isPortOpen = defaultIsPortOpen,
+  verifyGateway = defaultVerifyGateway
+) {
+  const startedAt = Date.now();
+  let lastResult: OpenClawConnectionCheckResult = {
+    ok: false,
+    code: 'network-error',
+    message: 'OpenClaw Gateway 응답을 아직 확인하지 못했습니다.',
+  };
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (await isPortOpen(config.gatewayHost, config.gatewayPort)) {
+      lastResult = await verifyGateway(config);
+      if (lastResult.ok) {
+        return lastResult;
+      }
+    }
+
+    await sleep(250);
+  }
+
+  return lastResult.code === 'ok'
+    ? lastResult
+    : {
+        ...lastResult,
+        message: `${lastResult.message} (timeout=${timeoutMs}ms)`,
+      };
+}
+
+function buildGatewayStartArgs(config: OpenClawRunnerConfig) {
+  const args = ['gateway', 'run', '--force', '--port', String(config.gatewayPort)];
+  const token = config.env.OPENCLAW_GATEWAY_TOKEN?.trim();
+
+  if (token) {
+    args.push('--token', token);
+  }
+
+  return args;
+}
+
 export function resolveOpenClawRunnerConfig({
   appCommand,
   env = process.env,
@@ -111,11 +169,13 @@ export function resolveOpenClawRunnerConfig({
 
 export function createOpenClawRunner(config: OpenClawRunnerConfig, dependencies: RunnerDependencies = {}) {
   const spawn = dependencies.spawn || nodeSpawn;
-  const existsSync = dependencies.existsSync || nodeExistsSync;
+  const commandExists = dependencies.commandExists || defaultCommandExists;
   const isPortOpen = dependencies.isPortOpen || defaultIsPortOpen;
-  const waitForPort =
-    dependencies.waitForPort ||
-    ((host, port, timeoutMs) => defaultWaitForPort(host, port, timeoutMs, isPortOpen));
+  const verifyGateway = dependencies.verifyGateway || defaultVerifyGateway;
+  const waitForGatewayReady =
+    dependencies.waitForGatewayReady ||
+    ((nextConfig, timeoutMs) =>
+      defaultWaitForGatewayReady(nextConfig, timeoutMs, isPortOpen, verifyGateway));
   const kill = dependencies.kill || process.kill.bind(process);
   const exit = dependencies.exit || process.exit.bind(process);
   const logger = dependencies.logger || console;
@@ -223,31 +283,55 @@ export function createOpenClawRunner(config: OpenClawRunnerConfig, dependencies:
       return;
     }
 
-    if (!existsSync(config.gatewayCmd)) {
-      throw new Error(`[run-with-openclaw] OpenClaw 실행 파일이 없습니다: ${config.gatewayCmd}`);
+    const portAlreadyOpen = await isPortOpen(config.gatewayHost, config.gatewayPort);
+    let existingGatewayResult: OpenClawConnectionCheckResult | null = null;
+
+    if (portAlreadyOpen) {
+      existingGatewayResult = await verifyGateway(config);
+      if (existingGatewayResult.ok) {
+        logger.log(
+          `[run-with-openclaw] 기존 Gateway를 재사용합니다: http://${config.gatewayHost}:${config.gatewayPort}`
+        );
+        return;
+      }
     }
 
-    if (await isPortOpen(config.gatewayHost, config.gatewayPort)) {
+    if (!commandExists(config.gatewayCmd)) {
+      if (existingGatewayResult) {
+        throw new Error(
+          `[run-with-openclaw] 기존 Gateway를 재사용할 수 없고 OpenClaw 실행 파일도 없습니다: ${config.gatewayCmd}. 마지막 확인: ${existingGatewayResult.message}`
+        );
+      }
+
+      throw new Error(`[run-with-openclaw] OpenClaw 실행 파일을 찾지 못했습니다: ${config.gatewayCmd}`);
+    }
+
+    if (existingGatewayResult) {
       logger.log(
-        `[run-with-openclaw] 기존 Gateway를 재사용합니다: http://${config.gatewayHost}:${config.gatewayPort}`
+        `[run-with-openclaw] 기존 Gateway 응답이 현재 설정과 맞지 않아 재시작합니다: ${existingGatewayResult.message}`
       );
-      return;
     }
 
     logger.log('[run-with-openclaw] OpenClaw Gateway를 시작합니다.');
-    gatewayChild = spawnManaged(config.gatewayCmd, ['gateway'], 'OpenClaw Gateway');
+    gatewayChild = spawnManaged(
+      config.gatewayCmd,
+      buildGatewayStartArgs(config),
+      'OpenClaw Gateway'
+    );
     ownsGateway = true;
     const currentGatewayChild = gatewayChild;
 
-    const ready = await waitForPort(config.gatewayHost, config.gatewayPort, 15000);
-    if (!ready) {
+    const ready = await waitForGatewayReady(config, 15000);
+    if (!ready.ok) {
       if (currentGatewayChild.exitCode !== null) {
         throw new Error(
           `Gateway가 비정상 종료되었습니다 (code=${currentGatewayChild.exitCode ?? 'null'})`
         );
       }
 
-      throw new Error('Gateway 포트가 15초 내에 열리지 않았습니다.');
+      throw new Error(
+        `Gateway가 15초 내에 현재 설정으로 준비되지 않았습니다. 마지막 확인: ${ready.message}`
+      );
     }
 
     logger.log(

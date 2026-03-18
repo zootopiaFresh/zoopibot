@@ -35,6 +35,8 @@ export {
 } from './openclaw-client';
 export type {
   OpenClawCallOptions,
+  OpenClawConnectionCheckCode,
+  OpenClawConnectionCheckResult,
   OpenClawConfig,
   OpenClawMessage,
   OpenClawResponse,

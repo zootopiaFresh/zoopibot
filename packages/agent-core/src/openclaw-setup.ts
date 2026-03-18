@@ -3,9 +3,9 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 
 import { createOpenClawClient, getOpenClawConfigFromEnv } from './openclaw-client';
+import { commandExists } from './openclaw-command';
 
 export type OpenClawProviderMode =
   | 'openai-api-key'
@@ -149,12 +149,16 @@ function upsertEnvContent(existingContent: string | null, updates: Record<string
 function buildEnvExampleContent(
   providerMetadata: OpenClawProviderMetadata,
   gatewayUrl: string,
+  gatewayHost: string,
+  gatewayPort: number,
   agentId: string,
   provider: OpenClawProviderMode,
   model: string
 ) {
   const lines = [
     `OPENCLAW_URL=${gatewayUrl}`,
+    `OPENCLAW_GATEWAY_HOST=${gatewayHost}`,
+    `OPENCLAW_GATEWAY_PORT=${gatewayPort}`,
     'OPENCLAW_GATEWAY_TOKEN=',
     `OPENCLAW_AGENT_ID=${agentId}`,
     `OPENCLAW_PROVIDER_MODE=${provider}`,
@@ -166,6 +170,14 @@ function buildEnvExampleContent(
   }
 
   return `${lines.join('\n')}\n`;
+}
+
+function parseGatewayUrl(rawUrl: string) {
+  try {
+    return new URL(rawUrl);
+  } catch {
+    return null;
+  }
 }
 
 function detectPackageManager(projectDir: string) {
@@ -248,6 +260,18 @@ function updatePackageJsonScriptsContent(content: string, packageManager: string
           : 'npm run dev';
     next['dev:with-gateway'] =
       `node --env-file=.env ./run-with-openclaw.mjs ${packageManagerDev}`;
+    changed = true;
+  }
+
+  if (!next['start:with-gateway'] && next.start) {
+    const packageManagerStart =
+      packageManager === 'yarn'
+        ? 'yarn start'
+        : packageManager === 'pnpm'
+          ? 'pnpm start'
+          : 'npm run start';
+    next['start:with-gateway'] =
+      `node --env-file=.env ./run-with-openclaw.mjs ${packageManagerStart}`;
     changed = true;
   }
 
@@ -336,6 +360,8 @@ export async function setupOpenClawProject(
 
   const envUpdates: Record<string, string> = {
     OPENCLAW_URL: gatewayUrl,
+    OPENCLAW_GATEWAY_HOST: gatewayHost,
+    OPENCLAW_GATEWAY_PORT: String(gatewayPort),
     OPENCLAW_GATEWAY_TOKEN: gatewayToken,
     OPENCLAW_AGENT_ID: agentId,
     OPENCLAW_PROVIDER_MODE: provider,
@@ -358,6 +384,8 @@ export async function setupOpenClawProject(
   const envExampleContent = buildEnvExampleContent(
     providerMetadata,
     gatewayUrl,
+    gatewayHost,
+    gatewayPort,
     agentId,
     provider,
     model
@@ -393,6 +421,7 @@ export async function setupOpenClawProject(
   const nextSteps = [
     providerMetadata.authHint ? `추가 인증: ${providerMetadata.authHint}` : null,
     `환경 파일 확인: ${envFile}`,
+    '설정 검증: agent-core openclaw doctor',
     `Gateway 포함 실행: node --env-file=.env ./run-with-openclaw.mjs ${packageManager === 'yarn' ? 'yarn dev' : packageManager === 'pnpm' ? 'pnpm dev' : 'npm run dev'}`,
   ].filter((item): item is string => Boolean(item));
 
@@ -416,15 +445,6 @@ export async function setupOpenClawProject(
   };
 }
 
-function commandExists(command: string) {
-  if (command.includes('/') || command.startsWith('.')) {
-    const resolved = path.resolve(command);
-    return existsSync(resolved);
-  }
-
-  return spawnSync('sh', ['-lc', `command -v ${command} >/dev/null 2>&1`]).status === 0;
-}
-
 export async function doctorOpenClawProject(
   options: Pick<
     OpenClawSetupOptions,
@@ -434,12 +454,14 @@ export async function doctorOpenClawProject(
   const projectDir = path.resolve(options.projectDir);
   const envFile = options.envFile || path.join(projectDir, '.env');
   const wrapperFile = options.wrapperFile || path.join(projectDir, 'run-with-openclaw.mjs');
-  const openclawCmd = options.openclawCmd || 'openclaw';
   const envContent = await readTextIfExists(envFile);
   const envValues = parseDotEnv(envContent ?? '');
+  const openclawCmd = envValues.OPENCLAW_CMD || options.openclawCmd || 'openclaw';
   const provider = (options.provider || envValues.OPENCLAW_PROVIDER_MODE || 'openai-api-key') as OpenClawProviderMode;
   const providerMetadata = getOpenClawProviderMetadata(provider, openclawCmd);
   const checks: OpenClawDoctorCheck[] = [];
+  const gatewayUrl = envValues.OPENCLAW_URL;
+  const parsedGatewayUrl = gatewayUrl ? parseGatewayUrl(gatewayUrl) : null;
 
   checks.push({
     id: 'openclaw-cmd',
@@ -455,12 +477,45 @@ export async function doctorOpenClawProject(
     message: envContent ? `.env 파일을 찾았습니다: ${envFile}` : `.env 파일이 없습니다: ${envFile}`,
   });
 
-  for (const key of ['OPENCLAW_URL', 'OPENCLAW_GATEWAY_TOKEN', 'OPENCLAW_AGENT_ID']) {
+  checks.push({
+    id: 'OPENCLAW_URL',
+    status: !gatewayUrl ? 'fail' : parsedGatewayUrl ? 'ok' : 'fail',
+    message: !gatewayUrl
+      ? 'OPENCLAW_URL 설정이 없습니다.'
+      : parsedGatewayUrl
+        ? `OPENCLAW_URL 설정이 있습니다: ${gatewayUrl}`
+        : `OPENCLAW_URL 값이 올바른 URL이 아닙니다: ${gatewayUrl}`,
+  });
+
+  for (const key of ['OPENCLAW_GATEWAY_HOST', 'OPENCLAW_GATEWAY_PORT', 'OPENCLAW_GATEWAY_TOKEN', 'OPENCLAW_AGENT_ID']) {
     checks.push({
       id: key,
-      status: envValues[key] ? 'ok' : 'fail',
+      status: envValues[key] ? 'ok' : key === 'OPENCLAW_GATEWAY_TOKEN' || key === 'OPENCLAW_AGENT_ID' ? 'fail' : 'warn',
       message: envValues[key] ? `${key} 설정이 있습니다.` : `${key} 설정이 없습니다.`,
     });
+  }
+
+  if (parsedGatewayUrl && envValues.OPENCLAW_GATEWAY_PORT) {
+    const urlPort =
+      parsedGatewayUrl.port ||
+      (parsedGatewayUrl.protocol === 'https:' ? '443' : parsedGatewayUrl.protocol === 'http:' ? '80' : '');
+    if (urlPort && urlPort !== envValues.OPENCLAW_GATEWAY_PORT) {
+      checks.push({
+        id: 'gateway-port-match',
+        status: 'warn',
+        message: `OPENCLAW_URL의 포트(${urlPort})와 OPENCLAW_GATEWAY_PORT(${envValues.OPENCLAW_GATEWAY_PORT})가 다릅니다.`,
+      });
+    }
+  }
+
+  if (parsedGatewayUrl && envValues.OPENCLAW_GATEWAY_HOST) {
+    if (parsedGatewayUrl.hostname !== envValues.OPENCLAW_GATEWAY_HOST) {
+      checks.push({
+        id: 'gateway-host-match',
+        status: 'warn',
+        message: `OPENCLAW_URL의 host(${parsedGatewayUrl.hostname})와 OPENCLAW_GATEWAY_HOST(${envValues.OPENCLAW_GATEWAY_HOST})가 다릅니다.`,
+      });
+    }
   }
 
   if (providerMetadata.inlineEnvKey) {
@@ -497,11 +552,16 @@ export async function doctorOpenClawProject(
         OPENCLAW_AGENT_ID: envValues.OPENCLAW_AGENT_ID || 'main',
       })
     );
-    const ok = await client.testConnection();
+    const gatewayCheck = await client.checkConnection();
     checks.push({
       id: 'gateway-health',
-      status: ok ? 'ok' : 'warn',
-      message: ok ? 'OpenClaw Gateway 응답을 확인했습니다.' : 'OpenClaw Gateway 연결을 확인하지 못했습니다.',
+      status:
+        gatewayCheck.code === 'ok'
+          ? 'ok'
+          : gatewayCheck.code === 'unauthorized'
+            ? 'fail'
+            : 'warn',
+      message: gatewayCheck.message,
     });
   }
 

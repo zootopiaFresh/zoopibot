@@ -18,6 +18,8 @@ export {
 } from './openclaw-setup';
 export type {
   OpenClawCallOptions,
+  OpenClawConnectionCheckCode,
+  OpenClawConnectionCheckResult,
   OpenClawConfig,
   OpenClawMessage,
   OpenClawResponse,

@@ -103,8 +103,9 @@ agent-core openclaw doctor
 
 - `.env` 생성 또는 업데이트
 - `.env.example` 생성 또는 업데이트
+- `OPENCLAW_GATEWAY_HOST`, `OPENCLAW_GATEWAY_PORT` 기본값 기록
 - `run-with-openclaw.mjs` wrapper 생성
-- 가능하면 `package.json`에 `openclaw:doctor`, `dev:with-gateway` script 추가
+- 가능하면 `package.json`에 `openclaw:doctor`, `dev:with-gateway`, `start:with-gateway` script 추가
 - provider별 추가 인증 힌트 출력
 
 예:
@@ -371,11 +372,13 @@ await runner.run(config, ['node', '--import', 'tsx', 'src/server.ts']);
 
 실전에서는 이 부분을 별도 `run-with-openclaw.mjs` 래퍼 파일로 두는 편이 관리가 쉽습니다.
 
+runner는 단순히 "포트가 열려 있다"는 이유만으로 기존 Gateway를 재사용하지 않습니다. 현재 `OPENCLAW_GATEWAY_TOKEN`으로 probe가 성공할 때만 재사용하고, 아니면 `openclaw gateway run --force --port --token ...`으로 현재 프로젝트 설정 기준으로 다시 올립니다.
+
 ## 설치 후 바로 막히는 지점
 
 ### `401 Unauthorized`
 
-대부분 `OPENCLAW_GATEWAY_TOKEN`이 비었거나 틀린 경우입니다.
+대부분 `OPENCLAW_GATEWAY_TOKEN`이 비었거나 틀린 경우입니다. `agent-core openclaw doctor`는 이제 이 경우를 별도로 구분해서 보여줍니다.
 
 ### `404 Not Found` 또는 패키지를 찾을 수 없음
 
@@ -387,7 +390,7 @@ await runner.run(config, ['node', '--import', 'tsx', 'src/server.ts']);
 
 ### `OpenClaw Gateway에 연결할 수 없습니다`
 
-Gateway가 꺼져 있거나 `OPENCLAW_URL`이 잘못된 경우입니다.
+Gateway가 꺼져 있거나 `OPENCLAW_URL`이 잘못된 경우입니다. `OPENCLAW_URL`과 `OPENCLAW_GATEWAY_HOST`/`OPENCLAW_GATEWAY_PORT`가 서로 다른 값이면 runner와 client가 다른 대상에 붙을 수 있으니 같이 확인하는 편이 안전합니다.
 
 ## 실제 소비 예제
 
